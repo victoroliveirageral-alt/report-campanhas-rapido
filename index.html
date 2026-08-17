@@ -130,7 +130,7 @@ input[type=search]{
 .aviso-min.visivel{display:block}
 
 /* ---------- KPIs ---------- */
-.kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-top:16px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-top:16px}
 .kpi{
   background:var(--card);border:1px solid var(--borda);border-radius:var(--raio);
   box-shadow:var(--sombra);padding:14px 16px 12px;min-width:0;
@@ -313,6 +313,7 @@ footer{margin-top:26px;text-align:center;font-size:11px;color:var(--texto-mudo)}
   <div class="carga" id="carga"><div class="spinner"></div><span id="cargaTexto">Carregando…</span></div>
   <div class="erro-box" id="erroBox"><span id="erroTexto"></span><button id="btnTentar">Tentar de novo</button></div>
   <div class="aviso-min" id="avisoMin">ℹ️ A integração tem dados a partir de <b>jan/2026</b> — o período foi ajustado.</div>
+  <div class="aviso-min" id="avisoVazio"></div>
 
   <div id="conteudo">
     <!-- KPIs -->
@@ -322,6 +323,8 @@ footer{margin-top:26px;text-align:center;font-size:11px;color:var(--texto-mudo)}
       <div class="kpi"><div class="rotulo">Impressões</div><div class="valor" id="kImp">—</div><div class="sub" id="kImpSub"></div></div>
       <div class="kpi"><div class="rotulo">Cliques</div><div class="valor" id="kCliq">—</div><div class="sub" id="kCliqSub"></div></div>
       <div class="kpi"><div class="rotulo">CTR</div><div class="valor" id="kCtr">—</div><div class="sub">cliques ÷ envios</div></div>
+      <div class="kpi" id="kpiLast" style="display:none"><div class="rotulo">Conv. last click</div><div class="valor" id="kLast">—</div><div class="sub" id="kLastSub"></div></div>
+      <div class="kpi" id="kpiAtrib" style="display:none"><div class="rotulo">Conv. atribuídas</div><div class="valor" id="kAtrib">—</div><div class="sub" id="kAtribSub"></div></div>
     </section>
 
     <!-- GRÁFICO DIÁRIO -->
@@ -375,6 +378,8 @@ footer{margin-top:26px;text-align:center;font-size:11px;color:var(--texto-mudo)}
               <th class="num" data-col="impressoes">Impressões<span class="seta" id="s-impressoes"></span></th>
               <th class="num" data-col="cliques">Cliques<span class="seta" id="s-cliques"></span></th>
               <th class="num" data-col="ctr">CTR<span class="seta" id="s-ctr"></span></th>
+              <th class="num conv-col" data-col="convLastClick" style="display:none">Conv. last click<span class="seta" id="s-convLastClick"></span></th>
+              <th class="num conv-col" data-col="convAtribuidas" style="display:none">Conv. atribuídas<span class="seta" id="s-convAtribuidas"></span></th>
             </tr>
           </thead>
           <tbody id="tbody"></tbody>
@@ -432,6 +437,8 @@ const state={
   ordenacao:{col:'envios',dir:-1},
   linhaAberta:null,
   carregando:false,
+  temConversao:false,
+  mesesVazios:[],
 };
 const cacheChunks=new Map(); // "from|to" -> {dados, quando}
 
@@ -454,6 +461,7 @@ function fmtDataLonga(iso){
   return d.toLocaleDateString('pt-BR',{weekday:'short',day:'2-digit',month:'short'});
 }
 const norm=s=>String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+function numOuNulo(v){if(v===undefined||v===null||v==='')return null;const n=Number(v);return Number.isFinite(n)?n:null;}
 function toast(msg){const t=$('toast');t.textContent=msg;t.classList.add('visivel');clearTimeout(t._tm);t._tm=setTimeout(()=>t.classList.remove('visivel'),2200);}
 function copiar(texto,msgOk){
   const done=()=>toast(msgOk);
@@ -524,7 +532,7 @@ async function carregarPeriodo(force=false){
   const carga=$('carga');carga.classList.add('visivel');
 
   const chunks=chunksDoPeriodo(from,to);
-  const resultados=[];let falha=null;
+  const resultados=[];let falha=null;const vazios=[];
   const t0=Date.now();
   let avisoAcordando=setTimeout(()=>{ $('cargaTexto').textContent='Acordando o servidor… a primeira consulta do dia pode levar até 1 min ⏳'; },6000);
 
@@ -536,12 +544,20 @@ async function carregarPeriodo(force=false){
     const fresco=emCache && (!chunkTemHoje(c) || (Date.now()-emCache.quando)<CACHE_HOJE_MS);
     if(fresco && !force){resultados.push(emCache.dados);continue;}
     try{
-      const d=await buscarChunk(c);
+      let d=await buscarChunk(c);
+      // guard: 200 com zero campanhas costuma ser instabilidade da API — tenta de novo antes de aceitar
+      if(!(d.campanhas||[]).length){
+        $('cargaTexto').textContent=rotulo+' (veio vazio, reconsultando…)';
+        await new Promise(r=>setTimeout(r,2500));
+        try{ const d2=await buscarChunk(c); if((d2.campanhas||[]).length) d=d2; }catch(_){}
+        if(!(d.campanhas||[]).length) vazios.push(`${fmtDataCurta(c.from)}–${fmtDataCurta(c.to)}`);
+      }
       cacheChunks.set(chave,{dados:d,quando:Date.now()});
       resultados.push(d);
       clearTimeout(avisoAcordando);
     }catch(e){falha={chunk:c,erro:e};break;}
   }
+  state.mesesVazios=vazios;
   clearTimeout(avisoAcordando);
   carga.classList.remove('visivel');
   $('conteudo').classList.remove('atualizando');
@@ -566,6 +582,9 @@ function aplicarResultados(lista){
     for(const c of (d.campanhas||[])){
       (c.labels||[]).forEach(l=>labels.add(l)); // TODAS as labels encontradas
       c.criado_por=c.criado_por??c.created_by??c.creator??c.autor??c.owner??c.criador??null; // campo futuro da API
+      // conversões por campanha (campos futuros da API) — aceita vários nomes
+      c.convLastClick=numOuNulo(c.conversoes_last_click??c.conversao_last_click??c.last_click??c.conversoes_clique??c.conversions_last_click);
+      c.convAtribuidas=numOuNulo(c.conversoes_atribuidas??c.conversao_atribuida??c.atribuidas??c.conversoes_atribuicao??c.attributed_conversions);
     }
     for(const c of (d.campanhas||[])){
       const ex=por.get(c.id);
@@ -586,6 +605,7 @@ function aplicarResultados(lista){
     c.ctrNum=c.envios>0?(c.cliques/c.envios*100):0;
     c.diario.sort((a,b)=>a.data<b.data?-1:1);
   }
+  state.temConversao=campanhas.some(c=>c.convLastClick!=null||c.convAtribuidas!=null);
   state.campanhas=campanhas;
   state.labelsDisponiveis=[...labels].sort((a,b)=>a.localeCompare(b,'pt-BR'));
   state.eventos=[...eventos].sort((a,b)=>a.localeCompare(b,'pt-BR'));
@@ -616,6 +636,11 @@ function filtradas(){
 /* ================= RENDER GERAL ================= */
 function renderizar(){
   const lista=filtradas();
+  const av=$('avisoVazio');
+  if(state.mesesVazios.length){
+    av.textContent=`⚠️ Sem retorno da API para ${state.mesesVazios.join(', ')} — pode ser instabilidade momentânea. Clique em "Atualizar dados" para reconsultar.`;
+    av.classList.add('visivel');
+  }else av.classList.remove('visivel');
   renderKpis(lista);
   renderChart(lista);
   renderTabela(lista);
@@ -638,6 +663,20 @@ function renderKpis(lista){
   $('kCliq').textContent=fmtCompacto(cli);
   $('kCliqSub').textContent=fmtInt(cli);
   $('kCtr').textContent=fmtPct(ctr);
+
+  // conversões (só aparecem quando a API enviar os campos)
+  const mostrar=state.temConversao;
+  $('kpiLast').style.display=mostrar?'':'none';
+  $('kpiAtrib').style.display=mostrar?'':'none';
+  document.querySelectorAll('.conv-col').forEach(el=>el.style.display=mostrar?'':'none');
+  if(mostrar){
+    const lc=lista.reduce((s,c)=>s+(c.convLastClick||0),0);
+    const at=lista.reduce((s,c)=>s+(c.convAtribuidas||0),0);
+    $('kLast').textContent=fmtCompacto(lc);
+    $('kLastSub').textContent=cli>0?`${(lc/cli*100).toLocaleString('pt-BR',{maximumFractionDigits:1})}% dos cliques`:fmtInt(lc);
+    $('kAtrib').textContent=fmtCompacto(at);
+    $('kAtribSub').textContent=env>0?`${(at/env*100).toLocaleString('pt-BR',{maximumFractionDigits:2})}% dos envios`:fmtInt(at);
+  }
 }
 
 /* ================= GRÁFICO ================= */
@@ -825,6 +864,10 @@ function renderTabela(lista){
     // números
     const mk=(v,f)=>{const td=document.createElement('td');td.className='num';td.textContent=f(v);return td;};
     tr.append(tdN,tdT,tdS,tdD,mk(c.envios,fmtInt),mk(c.impressoes,fmtInt),mk(c.cliques,fmtInt),mk(c.ctrNum,fmtPct));
+    if(state.temConversao){
+      const mkc=v=>{const td=document.createElement('td');td.className='num conv-col';td.textContent=v==null?'—':fmtInt(v);return td;};
+      tr.append(mkc(c.convLastClick),mkc(c.convAtribuidas));
+    }
     tr.addEventListener('click',()=>alternarDetalhe(tr,c));
     tbody.appendChild(tr);
   }
@@ -834,7 +877,7 @@ function alternarDetalhe(tr,c){
   document.querySelectorAll('tr.detalhe').forEach(x=>x.remove());
   if(aberto) return;
   const det=document.createElement('tr');det.className='detalhe';
-  const td=document.createElement('td');td.colSpan=8;
+  const td=document.createElement('td');td.colSpan=state.temConversao?10:8;
   const grid=document.createElement('div');grid.className='detalhe-grid';
 
   const b1=document.createElement('div');b1.className='bloco';
@@ -993,12 +1036,13 @@ $('btnCopiarIds').addEventListener('click',()=>{
 $('btnCsv').addEventListener('click',()=>{
   const lista=filtradas();
   if(!lista.length){toast('Nada pra exportar com esses filtros');return;}
-  const cab=['id','nome','tipo','status','criado_por','inicio','labels','evento_conversao','envios','impressoes','cliques','ctr_pct'];
+  const cab=['id','nome','tipo','status','criado_por','inicio','labels','evento_conversao','envios','impressoes','cliques','ctr_pct','conv_last_click','conv_atribuidas'];
   const esc=v=>{v=String(v==null?'':v);return /[";\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;};
   const linhas=[cab.join(';')];
   for(const c of lista){
     linhas.push([c.id,esc(c.nome),c.tipo,esc(c.status),esc(c.criado_por||''),c.data_iso||'',esc((c.labels||[]).join(', ')),esc(c.evento_conversao||''),
-      c.envios,c.impressoes,c.cliques,String(c.ctrNum.toFixed(2)).replace('.',',')].join(';'));
+      c.envios,c.impressoes,c.cliques,String(c.ctrNum.toFixed(2)).replace('.',','),
+      c.convLastClick==null?'':c.convLastClick, c.convAtribuidas==null?'':c.convAtribuidas].join(';'));
   }
   const blob=new Blob(['﻿'+linhas.join('\r\n')],{type:'text/csv;charset=utf-8'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);
