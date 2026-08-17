@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: report-campanhas-rapido
+    runtime: static
+    repo: https://github.com/victoroliveirageral-alt/report-campanhas-rapido.git
+    branch: main
+    buildCommand: echo "No build step"
+    staticPublishPath: .
+    autoDeployTrigger: commit
+    headers:
+      - path: /*
+        name: Cache-Control
+        value: no-store
