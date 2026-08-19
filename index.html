@@ -362,6 +362,15 @@ footer{margin-top:26px;text-align:center;font-size:11px;color:var(--texto-mudo)}
         </div>
         <div class="acoes-tabela">
           <span class="contagem" id="contagem"></span>
+          <label style="font-size:11.5px;color:var(--texto-suave)">Janela
+            <select id="selJanela" aria-label="Janela de atribuição" style="margin-left:4px">
+              <option value="1">1 dia</option><option value="3">3 dias</option>
+              <option value="5" selected>5 dias</option><option value="7">7 dias</option>
+              <option value="14">14 dias</option><option value="30">30 dias</option>
+              <option value="60">60 dias</option><option value="90">90 dias</option>
+            </select>
+          </label>
+          <button class="btn-mini" id="btnConvTabela">Carregar conversões</button>
           <button class="btn-mini" id="btnCopiarIds">Copiar IDs</button>
           <button class="btn-mini" id="btnCsv">Exportar CSV</button>
         </div>
@@ -439,6 +448,11 @@ const state={
   carregando:false,
   temConversao:false,
   mesesVazios:[],
+  janela:5,
+  conv:new Map(),      // id -> {status:'ok'|'erro'|'carregando', lastClick, atribuidas, erro}
+  convCarregando:false,
+  convCancelar:false,
+  convAtivo:false,   // usuário já pediu conversões: mantém as colunas visíveis
 };
 const cacheChunks=new Map(); // "from|to" -> {dados, quando}
 
@@ -461,6 +475,14 @@ function fmtDataLonga(iso){
   return d.toLocaleDateString('pt-BR',{weekday:'short',day:'2-digit',month:'short'});
 }
 const norm=s=>String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+function convDe(c){
+  const r=state.conv.get(c.id);
+  if(r&&r.status==='ok') return {lc:r.lastClick,at:r.atribuidas,status:'ok'};
+  if(r) return {lc:null,at:null,status:r.status,erro:r.erro};
+  if(c.convLastClick!=null||c.convAtribuidas!=null) return {lc:c.convLastClick,at:c.convAtribuidas,status:'ok'};
+  return {lc:null,at:null,status:null};
+}
+function mostrarConv(){return state.temConversao||state.convAtivo||state.conv.size>0||state.convCarregando;}
 function numOuNulo(v){if(v===undefined||v===null||v==='')return null;const n=Number(v);return Number.isFinite(n)?n:null;}
 function toast(msg){const t=$('toast');t.textContent=msg;t.classList.add('visivel');clearTimeout(t._tm);t._tm=setTimeout(()=>t.classList.remove('visivel'),2200);}
 function copiar(texto,msgOk){
@@ -580,6 +602,7 @@ function aplicarResultados(lista){
     (d.labels_permitidas||[]).forEach(l=>labels.add(l));
     (d.eventos_schema||[]).forEach(e=>eventos.add(e));
     for(const c of (d.campanhas||[])){
+      c.labels=[...new Set([...(c.labels||[]),...(c.labels_todas||[])])]; // backend novo manda labels_todas
       (c.labels||[]).forEach(l=>labels.add(l)); // TODAS as labels encontradas
       c.criado_por=c.criado_por??c.created_by??c.creator??c.autor??c.owner??c.criador??null; // campo futuro da API
       // conversões por campanha (campos futuros da API) — aceita vários nomes
@@ -665,17 +688,22 @@ function renderKpis(lista){
   $('kCtr').textContent=fmtPct(ctr);
 
   // conversões (só aparecem quando a API enviar os campos)
-  const mostrar=state.temConversao;
+  const mostrar=mostrarConv();
   $('kpiLast').style.display=mostrar?'':'none';
   $('kpiAtrib').style.display=mostrar?'':'none';
   document.querySelectorAll('.conv-col').forEach(el=>el.style.display=mostrar?'':'none');
   if(mostrar){
-    const lc=lista.reduce((s,c)=>s+(c.convLastClick||0),0);
-    const at=lista.reduce((s,c)=>s+(c.convAtribuidas||0),0);
-    $('kLast').textContent=fmtCompacto(lc);
-    $('kLastSub').textContent=cli>0?`${(lc/cli*100).toLocaleString('pt-BR',{maximumFractionDigits:1})}% dos cliques`:fmtInt(lc);
-    $('kAtrib').textContent=fmtCompacto(at);
-    $('kAtribSub').textContent=env>0?`${(at/env*100).toLocaleString('pt-BR',{maximumFractionDigits:2})}% dos envios`:fmtInt(at);
+    let lc=0,at=0,n=0,cliCarregados=0,envCarregados=0;
+    for(const c of lista){
+      const r=convDe(c);
+      if(r.status!=='ok') continue;
+      lc+=r.lc||0; at+=r.at||0; n++; cliCarregados+=c.cliques; envCarregados+=c.envios;
+    }
+    const cobertura=lista.length?` · ${n}/${lista.length} campanhas`:'';
+    $('kLast').textContent=n?fmtCompacto(lc):'—';
+    $('kLastSub').textContent=n?((cliCarregados>0?`${(lc/cliCarregados*100).toLocaleString('pt-BR',{maximumFractionDigits:1})}% dos cliques`:fmtInt(lc))+cobertura):'clique em "Carregar conversões"';
+    $('kAtrib').textContent=n?fmtCompacto(at):'—';
+    $('kAtribSub').textContent=n?((envCarregados>0?`${(at/envCarregados*100).toLocaleString('pt-BR',{maximumFractionDigits:2})}% dos envios`:fmtInt(at))+cobertura):`janela de ${state.janela} dias`;
   }
 }
 
@@ -826,8 +854,14 @@ function renderChart(lista){
 const CLASSE_STATUS={'Ativa':'chip-st-ativa','Concluída':'chip-st-concluida','Pausada':'chip-st-pausada','Agendada':'chip-st-agendada','Aguardando próxima execução':'chip-st-aguardando','Rascunho':'chip-st-rascunho'};
 function renderTabela(lista){
   const {col,dir}=state.ordenacao;
+  const valorCol=(c,k)=>{
+    if(k==='ctr') return c.ctrNum;
+    if(k==='convLastClick') return convDe(c).lc||0;
+    if(k==='convAtribuidas') return convDe(c).at||0;
+    return c[k];
+  };
   const orden=[...lista].sort((a,b)=>{
-    let va=col==='ctr'?a.ctrNum:a[col],vb=col==='ctr'?b.ctrNum:b[col];
+    let va=valorCol(a,col),vb=valorCol(b,col);
     if(typeof va==='string') return va.localeCompare(vb,'pt-BR')*dir;
     return ((va||0)-(vb||0))*dir;
   });
@@ -864,9 +898,16 @@ function renderTabela(lista){
     // números
     const mk=(v,f)=>{const td=document.createElement('td');td.className='num';td.textContent=f(v);return td;};
     tr.append(tdN,tdT,tdS,tdD,mk(c.envios,fmtInt),mk(c.impressoes,fmtInt),mk(c.cliques,fmtInt),mk(c.ctrNum,fmtPct));
-    if(state.temConversao){
-      const mkc=v=>{const td=document.createElement('td');td.className='num conv-col';td.textContent=v==null?'—':fmtInt(v);return td;};
-      tr.append(mkc(c.convLastClick),mkc(c.convAtribuidas));
+    if(mostrarConv()){
+      const r=convDe(c);
+      const mkc=v=>{
+        const td=document.createElement('td');td.className='num conv-col';
+        if(r.status==='carregando'){td.textContent='…';td.style.color='var(--texto-mudo)';}
+        else if(r.status==='erro'){td.textContent='erro';td.style.color='var(--rosa)';td.title=r.erro||'';}
+        else td.textContent=v==null?'—':fmtInt(v);
+        return td;
+      };
+      tr.append(mkc(r.lc),mkc(r.at));
     }
     tr.addEventListener('click',()=>alternarDetalhe(tr,c));
     tbody.appendChild(tr);
@@ -877,7 +918,7 @@ function alternarDetalhe(tr,c){
   document.querySelectorAll('tr.detalhe').forEach(x=>x.remove());
   if(aberto) return;
   const det=document.createElement('tr');det.className='detalhe';
-  const td=document.createElement('td');td.colSpan=state.temConversao?10:8;
+  const td=document.createElement('td');td.colSpan=mostrarConv()?10:8;
   const grid=document.createElement('div');grid.className='detalhe-grid';
 
   const b1=document.createElement('div');b1.className='bloco';
@@ -910,7 +951,27 @@ function alternarDetalhe(tr,c){
   if(!c.diario.length){const r=document.createElement('tr');const cx=document.createElement('td');cx.colSpan=4;cx.textContent='Sem registros diários';cx.style.color='var(--texto-mudo)';r.appendChild(cx);mt.appendChild(r);}
   b3.appendChild(mt);
 
-  grid.append(b1,b2,b3);td.appendChild(grid);det.appendChild(td);
+  const b4=document.createElement('div');b4.className='bloco';
+  b4.innerHTML='<b>Conversões</b>';
+  const cv=document.createElement('div');b4.appendChild(cv);
+  const pinta=()=>{
+    const r=convDe(c);
+    if(r.status==='ok') cv.innerHTML=`Last click: <b>${fmtInt(r.lc||0)}</b><br>Atribuídas: <b>${fmtInt(r.at||0)}</b><br><span style="color:var(--texto-mudo);font-size:11px">janela de ${state.janela} dias</span>`;
+    else if(r.status==='erro') cv.innerHTML=`<span style="color:var(--rosa)">${r.erro||'erro'}</span>`;
+    else cv.textContent='calculando…';
+  };
+  pinta();
+  if(!state.conv.has(c.id)&&String(c.evento_conversao||'').trim()){
+    state.convAtivo=true;
+    state.conv.set(c.id,{status:'carregando'});
+    buscarAtribuicao(c)
+      .then(r=>state.conv.set(c.id,{status:'ok',...r}))
+      .catch(e=>state.conv.set(c.id,{status:'erro',erro:String(e.message||e)}))
+      .finally(()=>{pinta();renderKpis(filtradas());});
+  }else if(!String(c.evento_conversao||'').trim()){
+    cv.innerHTML='<span style="color:var(--texto-mudo)">campanha sem evento de conversão</span>';
+  }
+  grid.append(b1,b2,b3,b4);td.appendChild(grid);det.appendChild(td);
   tr.after(det);
 }
 
@@ -1042,13 +1103,87 @@ $('btnCsv').addEventListener('click',()=>{
   for(const c of lista){
     linhas.push([c.id,esc(c.nome),c.tipo,esc(c.status),esc(c.criado_por||''),c.data_iso||'',esc((c.labels||[]).join(', ')),esc(c.evento_conversao||''),
       c.envios,c.impressoes,c.cliques,String(c.ctrNum.toFixed(2)).replace('.',','),
-      c.convLastClick==null?'':c.convLastClick, c.convAtribuidas==null?'':c.convAtribuidas].join(';'));
+      (convDe(c).lc==null?'':convDe(c).lc), (convDe(c).at==null?'':convDe(c).at)].join(';'));
   }
   const blob=new Blob(['﻿'+linhas.join('\r\n')],{type:'text/csv;charset=utf-8'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);
   a.download=`campanhas_${state.periodo.from}_a_${state.periodo.to}.csv`;a.click();
   setTimeout(()=>URL.revokeObjectURL(a.href),4000);
   toast('CSV exportado ✓');
+});
+
+/* ================= CONVERSÃO POR CAMPANHA (atribuição) ================= */
+// Usa POST /api/atribuicao-conversao do backend:
+//   eventos_convertidos_pos_clique  -> conversões "last click"
+//   eventos_convertidos_assistidos  -> conversões atribuídas à campanha como um todo
+async function buscarAtribuicao(c){
+  const evento=String(c.evento_conversao||'').trim();
+  if(!evento) throw new Error('campanha sem evento de conversão');
+  const body={
+    campaign_id:String(c.id),
+    campaign_type:c.tipo==='inapp'?'inapp':'push',
+    campaign_from:c.data_inicio_iso||c.data_iso,
+    campaign_to:c.data_fim_iso||c.data_inicio_iso||c.data_iso,
+    janela_dias:state.janela,
+    eventos:[{nome:evento,filtros:Array.isArray(c.conversao_filtros)?c.conversao_filtros:[]}]
+  };
+  const r=await fetchComTimeout(`${BACKEND}/api/atribuicao-conversao`,{
+    method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)
+  },180000);
+  const d=await r.json().catch(()=>({}));
+  if(!r.ok||!d.sucesso) throw new Error(d.erro||d.detalhes||('HTTP '+r.status));
+  return {
+    lastClick:numOuNulo(d.eventos_convertidos_pos_clique),
+    atribuidas:numOuNulo(d.eventos_convertidos_assistidos)
+  };
+}
+
+async function carregarConversoes(lista){
+  if(state.convCarregando) {state.convCancelar=true;return;}
+  const alvos=lista.filter(c=>String(c.evento_conversao||'').trim());
+  const semEvento=lista.length-alvos.length;
+  if(!alvos.length){toast('Nenhuma campanha do recorte tem evento de conversão');return;}
+  state.convCarregando=true;state.convCancelar=false;state.convAtivo=true;
+  const btn=$('btnConvTabela');btn.textContent='Cancelar';
+  const carga=$('carga');const txt=$('cargaTexto');
+  carga.classList.add('visivel');
+  let feitas=0;
+  const fila=[...alvos];
+  const worker=async()=>{
+    while(fila.length&&!state.convCancelar){
+      const c=fila.shift();
+      state.conv.set(c.id,{status:'carregando'});
+      renderTabela(filtradas());
+      try{
+        const r=await buscarAtribuicao(c);
+        state.conv.set(c.id,{status:'ok',...r});
+      }catch(e){
+        state.conv.set(c.id,{status:'erro',erro:String(e.message||e)});
+      }
+      feitas++;
+      txt.textContent=`Calculando conversões… ${feitas}/${alvos.length}`+(semEvento?` (${semEvento} sem evento de conversão)`:'');
+      renderKpis(filtradas());renderTabela(filtradas());
+    }
+  };
+  await Promise.all([worker(),worker()]);   // 2 em paralelo: o backend limita a 3 consultas simultâneas
+  carga.classList.remove('visivel');
+  state.convCarregando=false;
+  btn.textContent='Carregar conversões';
+  renderizar();
+  toast(state.convCancelar?`Interrompido em ${feitas}/${alvos.length}`:`Conversões carregadas (${feitas} campanhas)`);
+}
+
+$('btnConvTabela').addEventListener('click',()=>{
+  const lista=filtradas();
+  if(!state.convCarregando&&lista.length>25&&!confirm(`Vai calcular conversões de ${lista.length} campanhas, uma a uma na CleverTap. Pode levar vários minutos. Continuar?`)) return;
+  carregarConversoes(lista);
+});
+$('selJanela').addEventListener('change',e=>{
+  state.janela=parseInt(e.target.value,10)||5;
+  state.convAtivo=true;
+  state.conv.clear();          // janela mudou: números antigos não valem mais
+  renderizar();
+  toast(`Janela de ${state.janela} dias — recarregue as conversões`);
 });
 
 /* ================= ORDENAÇÃO ================= */
