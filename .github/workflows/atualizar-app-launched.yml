@@ -1,0 +1,39 @@
+name: Atualizar painel App Launched
+
+on:
+  schedule:
+    - cron: "30 7 * * *"   # 04:30 BRT: dados do dia anterior + até 4 dias de horário
+    - cron: "30 11 * * *"  # 08:30 BRT: repescagem leve, caso a primeira falhe
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: atualizar-app-launched
+  cancel-in-progress: false
+
+jobs:
+  atualizar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Buscar dados na API
+        env:
+          MAX_DIAS_HORA: ${{ github.event.schedule == '30 11 * * *' && '0' || '4' }}
+        run: python app-launched/atualizar.py
+      - name: Publicar se mudou
+        run: |
+          if git diff --quiet -- app-launched/dados.json; then
+            echo "Sem mudanças"; exit 0
+          fi
+          git config user.name "painel-app-launched[bot]"
+          git config user.email "painel-app-launched@users.noreply.github.com"
+          git add app-launched/dados.json
+          git commit -m "dados: App Launched até $(python -c 'import json;print(json.load(open("app-launched/dados.json"))["d1"])')"
+          git pull --rebase --autostash
+          git push

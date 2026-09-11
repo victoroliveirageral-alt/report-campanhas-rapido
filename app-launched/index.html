@@ -1,0 +1,712 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Aberturas do app | CRM Cartão de TODOS</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root{
+  --verde:#00A988;--verde-escuro:#007D55;--azul:#05a9c4;--rosa:#FB2A5B;--laranja:#f28b22;
+  --texto:#253632;--texto-suave:#6f7977;--fundo:#f4f8f6;--borda:#dce7e3;--branco:#fff;
+  --r-grande:18px;--r-peq:8px;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--fundo);color:var(--texto);font-family:Archivo,'Segoe UI',Roboto,system-ui,-apple-system,sans-serif;font-size:16px;line-height:1.5;font-variant-numeric:tabular-nums}
+.wrap{max-width:980px;margin:0 auto;padding:20px 16px 56px}
+button{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--azul);outline-offset:2px;border-radius:4px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* topo */
+.topo{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;justify-content:space-between;margin-bottom:18px}
+.topo h1{margin:0;font-size:1.05rem;font-weight:700;font-stretch:85%;letter-spacing:.01em}
+.topo .sub{color:var(--texto-suave);font-size:.85rem}
+.seg{display:inline-flex;background:var(--branco);border:1px solid var(--borda);border-radius:999px;padding:3px}
+.seg button{border:0;background:transparent;padding:6px 12px;border-radius:999px;font-size:.85rem;cursor:pointer;color:var(--texto-suave)}
+.seg button[aria-pressed=true]{background:var(--texto);color:#fff}
+
+/* manchete */
+.manchete{margin:6px 0 22px}
+.manchete p{margin:0;font-size:clamp(1.55rem,5.4vw,2.6rem);line-height:1.12;font-weight:600;font-stretch:80%;max-width:22ch}
+.manchete .num{font-weight:800;color:var(--verde-escuro)}
+.manchete .contexto{margin-top:10px;font-size:.95rem;font-weight:400;font-stretch:100%;color:var(--texto-suave);max-width:60ch}
+
+/* status */
+.status{font-size:.85rem;color:var(--texto-suave);display:flex;gap:10px;align-items:center;flex-wrap:wrap;min-height:22px;margin-bottom:10px}
+.barra{flex:1 1 140px;max-width:260px;height:6px;background:var(--borda);border-radius:99px;overflow:hidden}
+.barra i{display:block;height:100%;width:0;background:var(--verde);transition:width .3s}
+.alerta{background:#fff1f4;border:1px solid #f6c3cf;color:#8c1030;padding:10px 12px;border-radius:var(--r-peq);font-size:.9rem;margin:10px 0}
+.alerta button{margin-left:8px;border:1px solid currentColor;background:transparent;border-radius:6px;padding:2px 8px;cursor:pointer}
+
+/* períodos */
+.periodos{display:grid;grid-template-columns:repeat(2,1fr);gap:1px;background:var(--borda);border:1px solid var(--borda);border-radius:var(--r-grande);overflow:hidden;margin-bottom:34px}
+@media(min-width:760px){.periodos{grid-template-columns:repeat(4,1fr)}}
+.per{background:var(--branco);padding:14px 14px 12px}
+.per h2{margin:0;font-size:.95rem;font-weight:700}
+.per .datas{font-size:.75rem;color:var(--texto-suave);margin-bottom:10px}
+.linha{display:flex;justify-content:space-between;align-items:baseline;gap:6px;padding:3px 0}
+.linha .rot{font-size:.78rem;color:var(--texto-suave)}
+.linha .val{font-weight:700;font-size:1.02rem}
+.delta{font-size:.74rem;font-weight:600;white-space:nowrap}
+.delta.up{color:var(--verde-escuro)}.delta.down{color:#c8103e}.delta.eq{color:var(--texto-suave)}
+.per .cmp{font-size:.72rem;color:var(--texto-suave);margin-top:6px}
+.esqueleto{color:transparent!important;background:linear-gradient(90deg,#eef3f1,#e2eae7,#eef3f1);border-radius:4px}
+
+/* seções */
+section.bloco{margin:0 0 38px}
+section.bloco>h2{font-size:1.25rem;font-weight:700;font-stretch:85%;margin:0 0 4px}
+section.bloco>.nota{color:var(--texto-suave);font-size:.85rem;margin:0 0 14px;max-width:70ch}
+.ferr{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+
+/* ritmo da semana: elemento principal */
+.ritmo{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;align-items:end;height:230px;padding:0 2px;border-bottom:2px solid var(--texto)}
+.dia{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;position:relative}
+.dia .idx{font-size:.78rem;font-weight:700;margin-bottom:4px}
+.dia .col{width:100%;max-width:74px;border-radius:10px 10px 0 0;background:var(--verde);transition:height .5s cubic-bezier(.2,.8,.2,1)}
+.dia.fds .col{background:var(--laranja)}
+.dia.ontem .col{box-shadow:inset 0 0 0 3px var(--texto)}
+.dia .v{font-size:.7rem;color:var(--texto-suave);margin-top:3px;position:absolute;bottom:-40px}
+.rotulos{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;text-align:center;font-size:.82rem;font-weight:600;padding-top:6px}
+.rotulos span small{display:block;font-weight:400;color:var(--texto-suave);font-size:.7rem}
+.legenda{display:flex;gap:14px;flex-wrap:wrap;font-size:.78rem;color:var(--texto-suave);margin-top:10px}
+.legenda i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+
+/* insights */
+.insights{list-style:none;margin:0;padding:0;counter-reset:none}
+.insights li{padding:12px 0 12px 16px;border-top:1px solid var(--borda);position:relative;max-width:72ch}
+.insights li::before{content:"";position:absolute;left:0;top:19px;width:6px;height:6px;border-radius:50%;background:var(--verde)}
+.insights li.hip::before{background:var(--laranja)}
+.insights li b{font-weight:700}
+.insights li .tag{font-size:.72rem;color:var(--laranja);font-weight:700;margin-right:6px}
+
+/* gráficos */
+.graf{position:relative;height:280px;background:var(--branco);border:1px solid var(--borda);border-radius:var(--r-grande);padding:12px}
+.graf.baixo{height:220px}
+details.tabela{margin-top:10px;font-size:.85rem}
+details.tabela summary{cursor:pointer;color:var(--verde-escuro);font-weight:600}
+table{border-collapse:collapse;width:100%;margin-top:8px;background:var(--branco)}
+th,td{padding:6px 8px;border-bottom:1px solid var(--borda);text-align:right}
+th:first-child,td:first-child{text-align:left}
+th{font-weight:600;color:var(--texto-suave);font-size:.78rem}
+.tabscroll{max-height:320px;overflow:auto;border:1px solid var(--borda);border-radius:var(--r-peq)}
+
+/* horário */
+.heat{display:grid;grid-template-columns:34px repeat(24,1fr);gap:2px;font-size:.62rem;margin-top:18px}
+.heat div{aspect-ratio:1/1.3;border-radius:3px}
+.heat .h{background:none;text-align:center;color:var(--texto-suave);aspect-ratio:auto}
+.heat .w{background:none;color:var(--texto-suave);display:flex;align-items:center;aspect-ratio:auto}
+.vazio{background:var(--branco);border:1px dashed var(--borda);border-radius:var(--r-grande);padding:16px;font-size:.9rem;max-width:72ch}
+.vazio code{background:var(--fundo);padding:1px 5px;border-radius:4px;font-size:.82rem}
+/* relógio do dia */
+.relogio{display:grid;gap:18px;align-items:center}
+@media(min-width:760px){.relogio{grid-template-columns:minmax(300px,400px) 1fr}}
+.relogio svg{width:100%;max-width:400px;height:auto;display:block;margin:0 auto}
+.relogio .barra-h{fill:#b9d9cf}
+.relogio .barra-h.slot{fill:var(--verde)}
+.relogio .barra-h.pico{fill:var(--verde-escuro)}
+.relogio .guia{fill:none;stroke:var(--borda)}
+.relogio .hl{font-size:10px;fill:var(--texto-suave);text-anchor:middle;dominant-baseline:middle}
+.relogio .anel{fill:none;stroke-width:5;stroke-linecap:round}
+.relogio .anel-rot{font-size:11px;font-weight:700;dominant-baseline:middle}
+.relogio .centro-h{font-size:38px;font-weight:800;font-stretch:80%;text-anchor:middle;fill:var(--texto)}
+.relogio .centro-t{font-size:11px;text-anchor:middle;fill:var(--texto-suave)}
+.janelas{list-style:none;margin:0;padding:0}
+.janelas li{display:grid;grid-template-columns:10px 1fr auto;gap:4px 10px;align-items:baseline;padding:10px 0;border-top:1px solid var(--borda)}
+.janelas li:first-child{border-top:0}
+.janelas i{width:10px;height:10px;border-radius:50%;align-self:center}
+.janelas b{font-weight:700}
+.janelas .pct{font-weight:800;font-size:1.15rem;text-align:right}
+.janelas small{grid-column:2/4;color:var(--texto-suave);font-size:.8rem}
+.janelas .trilho{grid-column:2/4;height:5px;background:var(--borda);border-radius:9px;overflow:hidden}
+.janelas .trilho span{display:block;height:100%;border-radius:9px}
+.fonte-hora{font-size:.78rem;color:var(--texto-suave);margin:6px 0 0}
+details.importar{margin-top:16px;background:var(--branco);border:1px solid var(--borda);border-radius:var(--r-grande);padding:12px 14px;font-size:.88rem}
+details.importar summary{cursor:pointer;font-weight:600;color:var(--verde-escuro)}
+details.importar textarea{width:100%;font:inherit;font-size:.82rem;border:1px solid var(--borda);border-radius:8px;padding:8px;margin:8px 0}
+.imp-linha{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:6px 0}
+.imp-linha input,.imp-linha select{font:inherit;font-size:.85rem;border:1px solid var(--borda);border-radius:8px;padding:5px 6px;background:#fff;color:var(--texto)}
+.btn{border:0;background:var(--texto);color:#fff;border-radius:8px;padding:7px 14px;cursor:pointer;font-size:.85rem}
+.btn.sec{background:var(--branco);color:var(--texto);border:1px solid var(--borda)}
+#imp-msg{margin:8px 0 0;font-size:.82rem}
+.seg-peq button{padding:6px 9px;font-size:.8rem}
+.seg-peq{margin-bottom:4px}
+footer{border-top:1px solid var(--borda);padding-top:14px;font-size:.78rem;color:var(--texto-suave)}
+footer button{border:1px solid var(--borda);background:var(--branco);border-radius:8px;padding:6px 12px;cursor:pointer;font-size:.82rem;color:var(--texto)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="topo">
+  <div>
+    <h1 id="titulo">Aberturas do app</h1>
+    <div class="sub" id="sub">Evento App Launched na CleverTap</div>
+  </div>
+  <div class="seg" role="group" aria-label="Tipo de período">
+    <button type="button" data-modo="movel" aria-pressed="true">Dias corridos</button>
+    <button type="button" data-modo="cal" aria-pressed="false">Calendário</button>
+  </div>
+</header>
+
+<div class="manchete" aria-live="polite">
+  <p id="manchete"><span class="esqueleto">Carregando os números de ontem do app</span></p>
+  <div class="contexto" id="manchete-ctx"></div>
+</div>
+
+<div class="status" id="status" aria-live="polite"><span id="status-txt">Conectando à API</span><span class="barra" hidden id="barra"><i></i></span></div>
+<div id="alertas"></div>
+
+<div class="periodos" id="periodos"></div>
+
+<section class="bloco" aria-labelledby="h-ritmo">
+  <h2 id="h-ritmo">O ritmo da semana</h2>
+  <p class="nota" id="nota-ritmo">Média de cada dia nas últimas 8 semanas completas, sem feriados. O número em cima é quanto o dia fica acima ou abaixo da média da semana.</p>
+  <div class="ferr seg" role="group" aria-label="Métrica do ritmo" id="seg-ritmo">
+    <button type="button" data-m="e" aria-pressed="true">Aberturas</button>
+    <button type="button" data-m="u" aria-pressed="false">Únicos</button>
+    <button type="button" data-m="f" aria-pressed="false">Por pessoa</button>
+  </div>
+  <div class="ritmo" id="ritmo" role="img" aria-label="Gráfico de média por dia da semana"></div>
+  <div class="rotulos" id="ritmo-rot"></div>
+  <div class="legenda"><span><i style="background:var(--verde)"></i>Dia útil</span><span><i style="background:var(--laranja)"></i>Fim de semana</span><span><i style="background:#fff;box-shadow:inset 0 0 0 2px var(--texto)"></i>Dia da semana de ontem</span></div>
+  <details class="tabela"><summary>Ver em tabela</summary><div id="tab-ritmo"></div></details>
+</section>
+
+<section class="bloco" aria-labelledby="h-ins">
+  <h2 id="h-ins">O que os dados dizem</h2>
+  <p class="nota">Leituras calculadas a cada visita. Itens em laranja são hipóteses para testar, não conclusões.</p>
+  <ul class="insights" id="insights"><li class="esqueleto">Calculando</li></ul>
+</section>
+
+<section class="bloco" aria-labelledby="h-serie">
+  <h2 id="h-serie">Dia a dia</h2>
+  <p class="nota">Fins de semana em laranja, feriados nacionais em rosa.</p>
+  <div class="ferr">
+    <div class="seg" role="group" aria-label="Métrica" id="seg-met">
+      <button type="button" data-m="e" aria-pressed="true">Aberturas</button>
+      <button type="button" data-m="u" aria-pressed="false">Únicos</button>
+      <button type="button" data-m="f" aria-pressed="false">Por pessoa</button>
+    </div>
+    <div class="seg" role="group" aria-label="Janela" id="seg-jan">
+      <button type="button" data-j="30" aria-pressed="false">30d</button>
+      <button type="button" data-j="60" aria-pressed="true">60d</button>
+      <button type="button" data-j="120" aria-pressed="false">120d</button>
+    </div>
+  </div>
+  <div class="graf"><canvas id="c-serie" aria-label="Série diária"></canvas></div>
+  <details class="tabela"><summary>Ver em tabela</summary><div class="tabscroll" id="tab-serie"></div></details>
+</section>
+
+<section class="bloco" aria-labelledby="h-dom">
+  <h2 id="h-dom">Dia do mês</h2>
+  <p class="nota">Cada dia comparado com o mesmo dia da semana 1 e 2 semanas antes e depois. Tira o efeito segunda × domingo e deixa aparecer salário, vale e fim de mês. 100 = normal.</p>
+  <div class="graf baixo"><canvas id="c-dom" aria-label="Índice por dia do mês"></canvas></div>
+</section>
+
+<section class="bloco" aria-labelledby="h-hora">
+  <h2 id="h-hora">Relógio do dia</h2>
+  <p class="nota">Em que hora o app mais abre e quanto disso cai em cada janela da rotina de push.</p>
+  <div class="ferr seg seg-peq" role="group" aria-label="Recorte do horário" id="seg-hora">
+    <button type="button" data-p="todos" aria-pressed="true">Média</button>
+    <button type="button" data-p="uteis" aria-pressed="false">Dias úteis</button>
+    <button type="button" data-p="fds" aria-pressed="false">Fim de semana</button>
+    <button type="button" data-p="ontem" aria-pressed="false">Ontem</button>
+  </div>
+  <p class="fonte-hora" id="status-hora" aria-live="polite"></p>
+  <div id="hora"><div class="vazio">Carregando horário</div></div>
+</section>
+
+<footer>
+  <p id="rodape">Fonte: CleverTap via API do relatório de campanhas.</p>
+  <button type="button" id="btn-csv">Baixar CSV diário</button>
+  <button type="button" id="btn-recarregar">Atualizar agora</button>
+</footer>
+</div>
+
+<script type="application/json" id="dados-embutidos">{"evento":"App Launched","d1":"2026-09-10","gerado_em":"2026-09-11T18:07:25Z","consultas":{"2026-05-01|2026-05-01":[356247,245769],"2026-05-02|2026-05-02":[380336,259093],"2026-05-03|2026-05-03":[313475,221493],"2026-05-04|2026-05-04":[587436,351655],"2026-05-05|2026-05-05":[577262,350910],"2026-05-06|2026-05-06":[547310,333911],"2026-05-07|2026-05-07":[504263,316945],"2026-05-08|2026-05-08":[460603,294897],"2026-05-09|2026-05-09":[313425,215022],"2026-05-10|2026-05-10":[255829,185852],"2026-05-11|2026-05-11":[503281,312535],"2026-05-12|2026-05-12":[474351,299106],"2026-05-13|2026-05-13":[480598,303700],"2026-05-14|2026-05-14":[463857,293910],"2026-05-15|2026-05-15":[429035,276619],"2026-05-16|2026-05-16":[270168,182839],"2026-05-17|2026-05-17":[234997,153058],"2026-05-18|2026-05-18":[560572,312912],"2026-05-19|2026-05-19":[499148,313170],"2026-05-20|2026-05-20":[484446,306935],"2026-05-21|2026-05-21":[452319,286473],"2026-05-22|2026-05-22":[450065,287917],"2026-05-23|2026-05-23":[328405,227363],"2026-05-24|2026-05-24":[246294,178483],"2026-05-25|2026-05-25":[505998,312610],"2026-05-26|2026-05-26":[479206,302567],"2026-05-27|2026-05-27":[463933,285825],"2026-05-28|2026-05-28":[450574,285328],"2026-05-29|2026-05-29":[420294,270816],"2026-05-30|2026-05-30":[322611,218594],"2026-05-31|2026-05-31":[261784,188874],"2026-06-01|2026-06-01":[497914,308982],"2026-06-02|2026-06-02":[471664,293876],"2026-06-03|2026-06-03":[428727,276858],"2026-06-04|2026-06-04":[306164,213195],"2026-06-05|2026-06-05":[424400,275619],"2026-06-06|2026-06-06":[303309,212155],"2026-06-07|2026-06-07":[262562,191060],"2026-06-08|2026-06-08":[500609,313912],"2026-06-09|2026-06-09":[435858,274442],"2026-06-10|2026-06-10":[404053,252720],"2026-06-11|2026-06-11":[438755,271651],"2026-06-12|2026-06-12":[360918,231433],"2026-06-13|2026-06-13":[345653,235396],"2026-06-14|2026-06-14":[282387,200581],"2026-06-15|2026-06-15":[552822,346527],"2026-06-16|2026-06-16":[546005,342670],"2026-06-17|2026-06-17":[559965,354242],"2026-06-18|2026-06-18":[469348,294639],"2026-06-19|2026-06-19":[477992,304130],"2026-06-20|2026-06-20":[404873,237951],"2026-06-21|2026-06-21":[327550,231949],"2026-06-22|2026-06-22":[515542,317683],"2026-06-23|2026-06-23":[508481,322958],"2026-06-24|2026-06-24":[460454,282174],"2026-06-25|2026-06-25":[500442,301679],"2026-06-26|2026-06-26":[425580,267487],"2026-06-27|2026-06-27":[348557,230552],"2026-06-28|2026-06-28":[285472,200831],"2026-06-29|2026-06-29":[375559,234348],"2026-06-30|2026-06-30":[465924,282645],"2026-07-01|2026-07-01":[523125,324710],"2026-07-02|2026-07-02":[422131,261778],"2026-07-03|2026-07-03":[453944,281919],"2026-07-04|2026-07-04":[348583,219358],"2026-07-05|2026-07-05":[265363,187259],"2026-07-06|2026-07-06":[496465,309193],"2026-07-07|2026-07-07":[465165,292600],"2026-07-08|2026-07-08":[447963,288381],"2026-07-09|2026-07-09":[402784,262426],"2026-07-10|2026-07-10":[434202,275206],"2026-07-11|2026-07-11":[310014,213150],"2026-07-12|2026-07-12":[255502,187194],"2026-07-13|2026-07-13":[448573,283199],"2026-07-13|2026-08-11":[12225866,2765507],"2026-07-14|2026-07-14":[454076,294064],"2026-07-15|2026-07-15":[408603,261897],"2026-07-16|2026-07-16":[391732,255225],"2026-07-17|2026-07-17":[388426,253266],"2026-07-18|2026-07-18":[282459,196470],"2026-07-19|2026-07-19":[260714,191157],"2026-07-20|2026-07-20":[447260,281028],"2026-07-21|2026-07-21":[461959,295765],"2026-07-22|2026-07-22":[437437,281702],"2026-07-23|2026-07-23":[392340,252266],"2026-07-24|2026-07-24":[386124,254765],"2026-07-25|2026-07-25":[287776,201366],"2026-07-26|2026-07-26":[216053,158422],"2026-07-27|2026-07-27":[450981,284396],"2026-07-28|2026-07-28":[467987,296451],"2026-07-29|2026-07-29":[454393,285380],"2026-07-30|2026-07-30":[435232,275587],"2026-07-31|2026-07-31":[416114,265210],"2026-08-01|2026-08-01":[314833,214021],"2026-08-01|2026-08-10":[4198194,1480802],"2026-08-02|2026-08-02":[250651,179893],"2026-08-03|2026-08-03":[489589,302442],"2026-08-04|2026-08-04":[516552,322696],"2026-08-05|2026-08-05":[537259,323989],"2026-08-06|2026-08-06":[491474,305233],"2026-08-07|2026-08-07":[475941,295205],"2026-08-08|2026-08-08":[329886,217013],"2026-08-09|2026-08-09":[271989,189324],"2026-08-10|2026-08-10":[520020,313869],"2026-08-11|2026-08-11":[539433,306296],"2026-08-12|2026-08-12":[581133,353060],"2026-08-12|2026-08-26":[6846883,1926382],"2026-08-12|2026-09-10":[13097995,2792432],"2026-08-13|2026-08-13":[487723,295071],"2026-08-14|2026-08-14":[450729,265115],"2026-08-15|2026-08-15":[293195,194554],"2026-08-16|2026-08-16":[268498,187797],"2026-08-16|2026-08-25":[4537253,1488975],"2026-08-17|2026-08-17":[558279,308966],"2026-08-18|2026-08-18":[549268,301265],"2026-08-19|2026-08-19":[476755,292715],"2026-08-20|2026-08-20":[516085,323625],"2026-08-21|2026-08-21":[447088,279847],"2026-08-22|2026-08-22":[315274,207544],"2026-08-23|2026-08-23":[248131,170591],"2026-08-24|2026-08-24":[613431,324414],"2026-08-25|2026-08-25":[544444,307341],"2026-08-26|2026-08-26":[496850,306659],"2026-08-27|2026-08-27":[457318,281138],"2026-08-27|2026-09-10":[6251111,1890253],"2026-08-28|2026-08-28":[434985,271300],"2026-08-28|2026-09-03":[3016734,1184800],"2026-08-29|2026-08-29":[313174,205400],"2026-08-30|2026-08-30":[252749,174159],"2026-08-31|2026-08-31":[534792,319520],"2026-08-31|2026-09-03":[2015826,887970],"2026-09-01|2026-09-01":[504659,308215],"2026-09-01|2026-09-10":[4258119,1497462],"2026-09-02|2026-09-02":[483406,298022],"2026-09-03|2026-09-03":[492969,304956],"2026-09-04|2026-09-04":[424870,265099],"2026-09-04|2026-09-10":[2777059,1131960],"2026-09-05|2026-09-05":[321854,211782],"2026-09-06|2026-09-06":[250375,174606],"2026-09-07|2026-09-07":[277560,190493],"2026-09-07|2026-09-10":[1779986,815348],"2026-09-08|2026-09-08":[539201,323935],"2026-09-09|2026-09-09":[494831,302342],"2026-09-10|2026-09-10":[468382,285216]},"horas":{"2026-08-24":{"a":[67,45,28,24,21,80,206,353,689,736,769,743,802,706,650,402,240,363,369,422,317,219,244,110],"ok":[3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,2,1,2,2,2,2,2,3,2]},"2026-08-25":{"a":[75,49,25,19,35,64,218,348,448,694,799,685,789,560,555,477,529,484,413,540,354,320,241,135],"ok":[3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3]},"2026-08-26":{"a":[68,40,34,25,36,74,182,389,626,543,556,536,647,515,484,421,526,477,472,462,324,293,227,135],"ok":[3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3]},"2026-08-27":{"a":[74,36,34,22,26,80,184,375,434,524,547,574,581,505,474,437,457,433,392,422,322,291,220,171],"ok":[3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3]},"2026-08-28":{"a":[95,53,22,34,30,55,164,390,526,446,437,497,591,460,455,404,365,395,380,411,372,251,229,154],"ok":[3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3]},"2026-08-29":{"a":[81,60,29,19,35,42,101,201,269,356,606,363,349,335,281,268,236,251,261,290,301,219,192,158],"ok":[3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3]},"2026-08-30":{"a":[94,62,33,30,23,45,51,107,152,210,238,296,295,271,240,252,239,256,259,284,276,233,205,125],"ok":[3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3]},"2026-08-31":{"a":[65,38,30,32,24,76,196,377,495,639,644,614,610,505,493,464,764,476,485,420,569,340,273,152],"ok":[3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3]},"2026-09-01":{"a":[87,61,25,31,39,81,220,323,692,604,551,510,712,605,448,467,442,683,396,470,378,298,209,177],"ok":[3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3]},"2026-09-02":{"a":[69,54,30,21,35,71,208,352,563,511,521,595,579,621,501,490,400,455,354,471,426,310,230,148],"ok":[3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3]},"2026-09-03":{"a":[89,43,24,31,35,75,182,352,552,505,589,607,512,484,455,504,447,444,598,449,344,316,229,141],"ok":[3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3]},"2026-09-04":{"a":[94,52,38,27,30,69,186,359,415,435,494,500,500,395,410,378,433,369,368,480,322,242,221,159],"ok":[3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3]},"2026-09-05":{"a":[90,51,38,32,24,44,130,193,414,407,409,352,377,291,446,302,274,256,301,374,253,229,190,130],"ok":[3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3]},"2026-09-06":{"a":[83,38,34,19,13,23,52,99,251,257,307,298,276,242,374,266,223,223,222,303,298,209,176,114],"ok":[3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3]},"2026-09-07":{"a":[63,37,27,21,13,29,61,125,194,252,334,279,302,224,265,247,281,232,261,398,310,222,185,107],"ok":[3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3]},"2026-09-08":{"a":[67,51,35,24,24,63,173,367,660,575,611,569,684,689,777,664,493,504,474,533,354,345,243,127],"ok":[3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3]},"2026-09-09":{"a":[71,52,27,32,41,74,173,362,604,616,545,605,547,585,652,503,474,438,444,445,340,305,257,141],"ok":[3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3]},"2026-09-10":{"a":[104,43,28,25,42,66,183,315,512,506,531,496,529,509,651,556,506,426,476,368,326,260,208,158],"ok":[3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3]}},"horas_metodo":"CT Session Id equals: 1 segundo por minuto (60/3600), x60; extra\u00eddo em 2026-09-11"}</script>
+<script>
+(()=>{
+'use strict';
+const qs=new URLSearchParams(location.search);
+const API=(qs.get('api')||'https://relatorio-campanhas-clevertap.onrender.com').replace(/\/$/,'');
+const EVENTO=qs.get('evento')||'App Launched';
+const DIAS_SERIE=120, CONC=4;
+const TZ='America/Sao_Paulo';
+const SEMANA=['seg','ter','qua','qui','sex','sáb','dom'];
+const SEMANA_L=['segunda','terça','quarta','quinta','sexta','sábado','domingo'];
+const FERIADOS=new Set(['2026-01-01','2026-02-16','2026-02-17','2026-04-03','2026-04-21','2026-05-01','2026-06-04','2026-09-07','2026-10-12','2026-11-02','2026-11-15','2026-11-20','2026-12-25','2027-01-01','2027-02-08','2027-02-09','2027-03-26','2027-04-21','2027-05-01','2027-05-27','2027-09-07','2027-10-12','2027-11-02','2027-11-15','2027-11-20','2027-12-25']);
+
+if(EVENTO!=='App Launched'){document.getElementById('titulo').textContent=EVENTO;document.getElementById('sub').textContent='Evento na CleverTap';document.title=EVENTO+' | CRM Cartão de TODOS';}
+
+/* ---------- datas ---------- */
+const hoje=new Intl.DateTimeFormat('en-CA',{timeZone:TZ,year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+const toD=s=>{const[y,m,d]=s.split('-').map(Number);return new Date(Date.UTC(y,m-1,d,12))};
+const iso=D=>D.toISOString().slice(0,10);
+const add=(s,n)=>{const D=toD(s);D.setUTCDate(D.getUTCDate()+n);return iso(D)};
+const dow=s=>(toD(s).getUTCDay()+6)%7;
+const nDias=(a,b)=>Math.round((toD(b)-toD(a))/864e5)+1;
+const ultimoDia=(y,m)=>new Date(Date.UTC(y,m,0,12)).getUTCDate();
+const pad=n=>String(n).padStart(2,'0');
+let D1=add(hoje,-1);
+let IMUTAVEL=add(hoje,-3); // dias até aqui não mudam mais
+let EMB=(()=>{try{return JSON.parse(document.getElementById('dados-embutidos').textContent)}catch(e){return null}})();
+let modoEmb=false;
+const embGet=k=>{const v=EMB&&EMB.consultas&&EMB.consultas[k];return v?{e:v[0],u:v[1]}:null};
+const br=s=>{const[y,m,d]=s.split('-');return d+'/'+m};
+const brSem=s=>SEMANA[dow(s)]+', '+br(s);
+
+/* ---------- formatação ---------- */
+const nf=new Intl.NumberFormat('pt-BR');
+const fmt=n=>n==null?'—':nf.format(Math.round(n));
+const fmt2=n=>n==null?'—':n.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+function curto(n){if(n==null)return'—';if(n>=1e6)return(n/1e6).toLocaleString('pt-BR',{maximumFractionDigits:1})+' mi';if(n>=1e3)return Math.round(n/1e3).toLocaleString('pt-BR')+' mil';return nf.format(n)}
+const pct=(a,b)=>(a==null||b==null||b===0)?null:(a/b-1)*100;
+function deltaHTML(p){if(p==null)return'<span class="delta eq">—</span>';const r=Math.round(p*10)/10;if(Math.abs(r)<0.5)return'<span class="delta eq">= estável</span>';return`<span class="delta ${r>0?'up':'down'}">${r>0?'▲ +':'▼ '}${r.toLocaleString('pt-BR',{maximumFractionDigits:1})}%</span>`}
+const pctTxt=p=>Math.abs(p)<1?'estável':(p>0?'+':'')+Math.round(p)+'%';
+const media=a=>a.length?a.reduce((x,y)=>x+y,0)/a.length:null;
+
+/* ---------- API ---------- */
+const mem=new Map();
+const horasSessao={}; // horário calculado nesta visita
+const dormir=ms=>new Promise(r=>setTimeout(r,ms));
+
+async function fetchTimeout(url,opt={},ms=120000){const c=new AbortController();const t=setTimeout(()=>c.abort(),ms);try{return await fetch(url,{...opt,signal:c.signal})}finally{clearTimeout(t)}}
+
+async function consulta(from,to,forcar=false){
+  const k=from+'|'+to;
+  if(modoEmb)return embGet(k);
+  if(!forcar&&mem.has(k))return mem.get(k);
+  let ult;
+  for(let t=0;t<4;t++){
+    try{
+      const r=await fetchTimeout(API+'/api/conversao-geral',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({from,to,labels:[],evento:{nome:EVENTO,filtros:[]}})});
+      const d=await r.json();
+      if(d&&d.sucesso&&Number.isFinite(d.eventos_disparados)&&Number.isFinite(d.perfis_unicos)){
+        const v={e:d.eventos_disparados,u:d.perfis_unicos};
+        mem.set(k,v);return v;
+      }
+      ult=new Error((d&&(d.erro||d.detalhes))||('HTTP '+r.status));
+    }catch(e){ult=e}
+    await dormir(2500*(t+1));
+  }
+  console.warn('falhou',from,to,ult);return embGet(k);
+}
+
+async function pool(itens,n,fn,prog){let i=0,feito=0;const out=new Array(itens.length);
+  await Promise.all(Array.from({length:Math.min(n,itens.length)},async()=>{while(i<itens.length){const k=i++;out[k]=await fn(itens[k]);feito++;prog&&prog(feito,itens.length)}}));return out}
+
+const statusTxt=document.getElementById('status-txt'),barra=document.getElementById('barra');
+function status(t,p){statusTxt.textContent=t;if(p==null){barra.hidden=true}else{barra.hidden=false;barra.firstElementChild.style.width=Math.round(p*100)+'%'}}
+
+async function acordar(){
+  const ini=Date.now();const aviso=setTimeout(()=>status('Servidor acordando. A primeira consulta do dia pode levar até 1 minuto'),3000);
+  try{await fetchTimeout(API+'/health',{mode:'no-cors'},90000)}catch(e){}finally{clearTimeout(aviso)}
+  return Date.now()-ini;
+}
+
+/* ---------- semente de histórico (dias fechados) ---------- */
+function carregarSemente(){
+  if(!EMB||EVENTO!==EMB.evento)return;
+  for(const[k,[e,u]]of Object.entries(EMB.consultas||{})){const[a,b]=k.split('|');if(a===b&&b<=IMUTAVEL&&!mem.has(k))mem.set(k,{e,u})}
+}
+
+/* ---------- períodos ---------- */
+let modo='movel';
+function periodos(){
+  const out=[{id:'d1',nome:'Ontem',a:[D1,D1],b:[add(D1,-7),add(D1,-7)],cmp:'vs mesmo dia da semana passada'}];
+  if(modo==='movel'){
+    out.push({id:'s',nome:'7 dias',a:[add(D1,-6),D1],b:[add(D1,-13),add(D1,-7)],cmp:'vs 7 dias anteriores'});
+    out.push({id:'q',nome:'15 dias',a:[add(D1,-14),D1],b:[add(D1,-29),add(D1,-15)],cmp:'vs 15 dias anteriores'});
+    out.push({id:'m',nome:'30 dias',a:[add(D1,-29),D1],b:[add(D1,-59),add(D1,-30)],cmp:'vs 30 dias anteriores'});
+  }else{
+    const seg=add(D1,-dow(D1));const len=nDias(seg,D1);
+    out.push({id:'s',nome:'Semana',a:[seg,D1],b:[add(seg,-7),add(D1,-7)],cmp:len===7?'vs semana anterior':`vs mesmos ${len} dias da semana anterior`});
+    const[y,m,d]=D1.split('-').map(Number);
+    const qIni=d<=15?1:16;const qa=[`${y}-${pad(m)}-${pad(qIni)}`,D1];const ql=d-qIni+1;
+    let qb;if(qIni===16){qb=[`${y}-${pad(m)}-01`,`${y}-${pad(m)}-${pad(Math.min(ql,15))}`]}
+    else{const pm=m===1?12:m-1,py=m===1?y-1:y;qb=[`${py}-${pad(pm)}-16`,`${py}-${pad(pm)}-${pad(Math.min(15+ql,ultimoDia(py,pm)))}`]}
+    out.push({id:'q',nome:'Quinzena',a:qa,b:qb,cmp:'vs mesmo trecho da quinzena anterior'});
+    const pm=m===1?12:m-1,py=m===1?y-1:y;
+    out.push({id:'m',nome:'Mês',a:[`${y}-${pad(m)}-01`,D1],b:[`${py}-${pad(pm)}-01`,`${py}-${pad(pm)}-${pad(Math.min(d,ultimoDia(py,pm)))}`],cmp:'vs mesmos dias do mês anterior'});
+  }
+  return out;
+}
+
+function renderPeriodosEsqueleto(ps){
+  document.getElementById('periodos').innerHTML=ps.map(p=>`<div class="per" id="p-${p.id}"><h2>${p.nome}</h2><div class="datas">${p.a[0]===p.a[1]?brSem(p.a[0]):br(p.a[0])+' a '+br(p.a[1])}</div>
+  ${['Aberturas','Únicos','Por pessoa'].map(r=>`<div class="linha"><span class="rot">${r}</span><span class="val esqueleto">000.000</span></div>`).join('')}</div>`).join('');
+}
+function ferNota(p){const tem=([a,b])=>[...FERIADOS].filter(f=>f>=a&&f<=b);const fa=tem(p.a),fb=tem(p.b);if(!fa.length&&!fb.length)return'';return`<br>Feriado ${fa.length?'neste período ('+fa.map(br).join(', ')+')':''}${fa.length&&fb.length?' e ':''}${fb.length?'no período comparado ('+fb.map(br).join(', ')+')':''}`}
+function renderPeriodo(p,A,B){
+  const el=document.getElementById('p-'+p.id);if(!el)return;
+  const linha=(rot,va,vb,f)=>`<div class="linha"><span class="rot">${rot}</span><span><span class="val">${va==null?'—':f(va)}</span></span></div><div class="linha" style="padding-top:0"><span></span>${deltaHTML(pct(va,vb))}</div>`;
+  if(!A){el.innerHTML=`<h2>${p.nome}</h2><div class="datas">${br(p.a[0])} a ${br(p.a[1])}</div><p class="delta down">Não carregou. Use "Atualizar agora".</p>`;return}
+  const fa=A.e/A.u,fb=B?B.e/B.u:null;
+  el.innerHTML=`<h2>${p.nome}</h2><div class="datas">${p.a[0]===p.a[1]?brSem(p.a[0]):br(p.a[0])+' a '+br(p.a[1])}</div>
+   ${linha('Aberturas',A.e,B&&B.e,fmt)}${linha('Únicos',A.u,B&&B.u,fmt)}${linha('Por pessoa',fa,fb,fmt2)}
+   <div class="cmp">${p.cmp}${B?'':' (comparação indisponível)'}${ferNota(p)}</div>`;
+}
+
+async function carregarPeriodos(forcar=false,esqueleto=true){
+  const ps=periodos();if(esqueleto)renderPeriodosEsqueleto(ps);
+  const pares=ps.flatMap(p=>[p.a,p.b]);
+  const res=await pool(pares,CONC,([f,t])=>consulta(f,t,forcar&&t>IMUTAVEL));
+  ps.forEach((p,i)=>renderPeriodo(p,res[i*2],res[i*2+1]));
+  return {ps,res};
+}
+
+/* ---------- série diária ---------- */
+let serie=[]; // {d,e,u,f,dw,fer}
+async function carregarSerie(forcar=false){
+  const ini=add(D1,-(DIAS_SERIE-1));const dias=[];for(let i=0;i<DIAS_SERIE;i++)dias.push(add(ini,i));
+  const faltam=dias.filter(d=>!(mem.has(d+'|'+d)&&d<=IMUTAVEL));
+  if(faltam.length>6)status(`Buscando ${faltam.length} dias na API`,0);
+  const res=await pool(dias,CONC,d=>consulta(d,d,forcar&&d>IMUTAVEL),(k,n)=>{if(faltam.length>6)status(`Buscando dias na API (${k} de ${n})`,k/n)});
+  serie=dias.map((d,i)=>{const r=res[i];return{d,e:r?r.e:null,u:r?r.u:null,f:r&&r.u?r.e/r.u:null,dw:dow(d),fer:FERIADOS.has(d)}});
+  const falhas=serie.filter(x=>x.e==null).map(x=>x.d);
+  mostrarFalhas(falhas);
+  return serie;
+}
+function mostrarFalhas(f){
+  const box=document.getElementById('alertas');
+  if(!f.length){box.innerHTML='';return}
+  box.innerHTML=`<div class="alerta">${f.length} dia(s) não vieram da API (${f.slice(0,5).map(br).join(', ')}${f.length>5?'…':''}). Eles ficam de fora das médias, sem virar zero. <button type="button" id="btn-refazer">Tentar de novo</button></div>`;
+  document.getElementById('btn-refazer').onclick=()=>iniciar(false);
+}
+
+/* ---------- análises ---------- */
+function perfilSemana(){
+  const fim=dow(D1)===6?D1:add(D1,-(dow(D1)+1));const ini=add(fim,-55);
+  const sel=serie.filter(x=>x.d>=ini&&x.d<=fim&&!x.fer&&x.e!=null);
+  const P=[0,1,2,3,4,5,6].map(i=>{const s=sel.filter(x=>x.dw===i);const e=media(s.map(x=>x.e)),u=media(s.map(x=>x.u));return{i,e,u,f:e&&u?e/u:null,n:s.length}});
+  const me=media(P.map(p=>p.e)),mu=media(P.map(p=>p.u)),mf=media(P.map(p=>p.f));
+  P.forEach(p=>{p.ie=p.e/me*100;p.iu=p.u/mu*100;p.if=p.f/mf*100});
+  return{P,ini,fim,n:sel.length};
+}
+function indiceDiaMes(){
+  const by=new Map(serie.map(x=>[x.d,x]));const acc={};
+  for(const x of serie){if(x.fer||x.e==null)continue;
+    const refs=[-14,-7,7,14].map(k=>by.get(add(x.d,k))).filter(r=>r&&!r.fer&&r.e!=null).map(r=>r.e);
+    if(refs.length<3)continue;const dm=+x.d.slice(8);(acc[dm]=acc[dm]||[]).push(x.e/media(refs)*100)}
+  return Array.from({length:31},(_,i)=>{const a=acc[i+1]||[];return{dm:i+1,idx:a.length?media(a):null,n:a.length}});
+}
+
+/* ---------- render: ritmo ---------- */
+let metRitmo='e',perfil=null;
+function renderRitmo(){
+  if(!perfil)return;const P=perfil.P;const key=metRitmo,ik='i'+metRitmo;
+  const max=Math.max(...P.map(p=>p[key]||0));const min=Math.min(...P.map(p=>p[key]||Infinity));
+  const base=metRitmo==='f'?min*0.85:0; // por pessoa: eixo não começa no zero, avisado na nota
+  document.getElementById('ritmo').innerHTML=P.map(p=>{const h=p[key]==null?0:((p[key]-base)/(max-base))*82+4;const d=Math.round(p[ik]-100);
+    return`<div class="dia ${p.i>=5?'fds':''} ${p.i===dow(D1)?'ontem':''}"><span class="idx" style="color:${d>=0?'var(--verde-escuro)':'#c8103e'}">${d>0?'+':''}${d}%</span><div class="col" style="height:${h}%"></div></div>`}).join('');
+  document.getElementById('ritmo-rot').innerHTML=P.map(p=>`<span>${SEMANA[p.i]}<small>${metRitmo==='f'?fmt2(p.f):curto(p[key])}</small></span>`).join('');
+  document.getElementById('nota-ritmo').textContent=`Média de cada dia entre ${br(perfil.ini)} e ${br(perfil.fim)} (8 semanas completas, sem feriados). O número em cima é quanto o dia fica acima ou abaixo da média da semana.${metRitmo==='f'?' Em "por pessoa" a altura das barras não parte do zero, para a diferença aparecer.':''}`;
+  document.getElementById('tab-ritmo').innerHTML=`<table><thead><tr><th>Dia</th><th>Aberturas</th><th>Índice</th><th>Únicos</th><th>Índice</th><th>Por pessoa</th><th>Semanas</th></tr></thead><tbody>${P.map(p=>`<tr><td>${SEMANA_L[p.i]}</td><td>${fmt(p.e)}</td><td>${Math.round(p.ie)}</td><td>${fmt(p.u)}</td><td>${Math.round(p.iu)}</td><td>${fmt2(p.f)}</td><td>${p.n}</td></tr>`).join('')}</tbody></table>`;
+}
+
+/* ---------- render: manchete + insights ---------- */
+function renderManchete(){
+  const x=serie.find(s=>s.d===D1);const m=document.getElementById('manchete'),c=document.getElementById('manchete-ctx');
+  if(!x||x.e==null){m.textContent='Os números de ontem ainda não vieram da API.';return}
+  m.innerHTML=`Ontem o app abriu <span class="num">${curto(x.e)}</span> vezes, por <span class="num">${curto(x.u)}</span> pessoas.`;
+  const mesmos=[1,2,3,4,5,6,7,8].map(k=>serie.find(s=>s.d===add(D1,-7*k))).filter(s=>s&&!s.fer&&s.e!=null);
+  const mu=media(mesmos.map(s=>s.e));
+  let t=`${SEMANA_L[dow(D1)][0].toUpperCase()+SEMANA_L[dow(D1)].slice(1)}, ${br(D1)}. Cada pessoa abriu ${fmt2(x.f)} vezes.`;
+  if(mu)t+=` Na comparação com a média das últimas ${mesmos.length} ${SEMANA_L[dow(D1)]}s: ${pctTxt(pct(x.e,mu))} em aberturas.`;
+  if(x.fer)t+=' Foi feriado nacional.';
+  c.textContent=t;
+}
+
+function renderInsights(){
+  const L=[];const P=perfil.P;
+  const ord=[...P].sort((a,b)=>b.ie-a.ie);const top=ord[0],seg2=ord[1],fundo=ord[6];
+  const tops=(top.ie-seg2.ie)<3?`${SEMANA_L[top.i]} e ${SEMANA_L[seg2.i]}`:SEMANA_L[top.i];
+  L.push(`<b>Pico em ${tops}.</b> ${(top.ie-seg2.ie)<3?'Ficam':'Fica'} ${pctTxt(top.ie-100)} acima da média da semana em aberturas e ${pctTxt(top.iu-100)} em pessoas únicas.`);
+  L.push(`<b>O vale é ${SEMANA_L[fundo.i]}:</b> ${pctTxt(fundo.ie-100)} em aberturas. Um ${SEMANA_L[fundo.i]} rende ${Math.round(fundo.e/top.e*100)}% das aberturas de uma ${SEMANA_L[top.i]}.`);
+  const util=P.slice(0,5),fds=P.slice(5);
+  const fu=media(util.map(p=>p.e))/media(util.map(p=>p.u)),ff=media(fds.map(p=>p.e))/media(fds.map(p=>p.u));
+  if(ff<fu)L.push(`<b>No fim de semana cai a quantidade de gente e também quantas vezes cada um abre.</b> Em dia útil cada pessoa abre ${fmt2(fu)} vezes; no sábado e domingo, ${fmt2(ff)}.`);
+  const dUteis=media(util.map(p=>p.e)),dQuiSex=media(P.slice(3,5).map(p=>p.e)),dSegTer=media(P.slice(0,2).map(p=>p.e));
+  L.push(`<b>A semana perde fôlego aos poucos:</b> quinta e sexta rendem ${pctTxt(pct(dQuiSex,dSegTer))} em aberturas na comparação com segunda e terça.`);
+
+  // tendência 28 x 28
+  const j=(a,b)=>serie.filter(x=>x.d>=a&&x.d<=b&&x.e!=null);
+  const r1=j(add(D1,-27),D1),r0=j(add(D1,-55),add(D1,-28));
+  if(r1.length>=25&&r0.length>=25){const pe=pct(media(r1.map(x=>x.e)),media(r0.map(x=>x.e))),pu=pct(media(r1.map(x=>x.u)),media(r0.map(x=>x.u)));
+    L.push(`<b>Últimas 4 semanas ${Math.abs(pe)<1.5?'estáveis':pe>0?'em alta':'em queda'}:</b> média diária de aberturas ${pctTxt(pe)} e de pessoas únicas ${pctTxt(pu)} contra as 4 semanas anteriores.`)}
+
+  // dia do mês
+  const dm=indiceDiaMes().filter(x=>x.n>=3);
+  if(dm.length>=20){const alto=[...dm].sort((a,b)=>b.idx-a.idx)[0],baixo=[...dm].sort((a,b)=>a.idx-b.idx)[0];
+    const nmax=Math.max(...dm.map(x=>x.n));
+    if(alto.idx>=106||baixo.idx<=94){
+      let t=`<b>Dia do mês:</b> `;const p=[];
+      if(alto.idx>=106)p.push(`dia ${alto.dm} costuma vir ${pctTxt(alto.idx-100)} acima do normal para o dia da semana`);
+      if(baixo.idx<=94)p.push(`dia ${baixo.dm} vem ${pctTxt(baixo.idx-100)}`);
+      L.push(t+p.join('; ')+`. Base de só ${nmax} meses, então trate como sinal fraco.`);
+    }else L.push(`<b>Sem efeito claro de dia do mês.</b> Descontando o dia da semana, nenhum dia foge mais de 6% do normal; salário e vale não aparecem nas aberturas.`);
+  }
+
+  // feriado recente
+  const fer=serie.filter(x=>x.fer&&x.e!=null&&x.d>=add(D1,-60)).pop();
+  if(fer){const refs=[-7,7].map(k=>serie.find(s=>s.d===add(fer.d,k))).filter(s=>s&&s.e!=null&&!s.fer);
+    if(refs.length)L.push(`<b>Feriado derruba:</b> ${brSem(fer.d)} teve ${pctTxt(pct(fer.e,media(refs.map(r=>r.e))))} de aberturas contra o mesmo dia da semana antes e depois.`)}
+
+  L.push(`<span class="tag">hipótese</span> Se a meta do push é trazer quem não abriria sozinho, sábado e domingo são onde há mais espaço para puxar abertura. Se a meta é converter quem já está no app, o pico de ${SEMANA_L[top.i]} concentra mais gente com o app aberto. Vale um teste com grupo de controle antes de mudar a agenda.`);
+  document.getElementById('insights').innerHTML=L.map(t=>`<li class="${t.includes('class="tag"')?'hip':''}">${t}</li>`).join('');
+}
+
+/* ---------- render: gráficos ---------- */
+let chSerie=null,chDom=null,metSerie='e',janela=60;
+const COR={e:'#00A988',u:'#05a9c4',f:'#253632'};
+function renderSerie(){
+  const s=serie.slice(-janela);const vals=s.map(x=>x[metSerie]);
+  const pc=s.map(x=>x.fer?'#FB2A5B':x.dw>=5?'#f28b22':COR[metSerie]);
+  const cfg={type:'line',data:{labels:s.map(x=>br(x.d)),datasets:[{data:vals,borderColor:COR[metSerie],backgroundColor:pc,pointBackgroundColor:pc,pointBorderColor:pc,pointRadius:janela>60?2:3,pointHoverRadius:6,borderWidth:2,tension:.25,spanGaps:false}]},
+    options:{responsive:true,maintainAspectRatio:false,animation:false,interaction:{mode:'index',intersect:false},
+      plugins:{legend:{display:false},tooltip:{callbacks:{title:it=>{const x=s[it[0].dataIndex];return brSem(x.d)+(x.fer?' (feriado)':'')},label:it=>{const x=s[it.dataIndex];return[`Aberturas: ${fmt(x.e)}`,`Únicos: ${fmt(x.u)}`,`Por pessoa: ${fmt2(x.f)}`]}}}},
+      scales:{x:{grid:{display:false},ticks:{maxRotation:0,autoSkipPadding:14,font:{family:getComputedStyle(document.body).fontFamily}}},y:{beginAtZero:metSerie!=='f',grid:{color:'#e8efec'},ticks:{font:{family:getComputedStyle(document.body).fontFamily},callback:v=>metSerie==='f'?v.toLocaleString('pt-BR',{maximumFractionDigits:2}):curto(v)}}}}};
+  if(chSerie)chSerie.destroy();chSerie=new Chart(document.getElementById('c-serie'),cfg);
+  document.getElementById('tab-serie').innerHTML=`<table><thead><tr><th>Dia</th><th>Aberturas</th><th>Únicos</th><th>Por pessoa</th></tr></thead><tbody>${[...serie].reverse().map(x=>`<tr><td>${brSem(x.d)}${x.fer?' (feriado)':''}</td><td>${fmt(x.e)}</td><td>${fmt(x.u)}</td><td>${fmt2(x.f)}</td></tr>`).join('')}</tbody></table>`;
+}
+function renderDom(){
+  const dm=indiceDiaMes();
+  const cfg={type:'bar',data:{labels:dm.map(x=>x.dm),datasets:[{data:dm.map(x=>x.n>=2?x.idx:null),backgroundColor:dm.map(x=>x.idx>=105?'#00A988':x.idx!=null&&x.idx<=95?'#FB2A5B':'#c9d8d3'),borderRadius:3}]},
+    options:{responsive:true,maintainAspectRatio:false,animation:false,plugins:{legend:{display:false},tooltip:{callbacks:{title:it=>'Dia '+it[0].label,label:it=>{const x=dm[it.dataIndex];return[`Índice ${Math.round(x.idx)} (100 = normal)`,`${x.n} ocorrência(s)`]}}}},
+      scales:{x:{grid:{display:false},ticks:{autoSkip:true,maxRotation:0,font:{family:getComputedStyle(document.body).fontFamily,size:10}}},y:{min:80,max:120,grid:{color:'#e8efec'},ticks:{stepSize:10,font:{family:getComputedStyle(document.body).fontFamily}}}}}};
+  if(chDom)chDom.destroy();chDom=new Chart(document.getElementById('c-dom'),cfg);
+}
+
+/* ---------- relógio do dia ---------- */
+/* Como o horário é medido: o CT Session Id do App Launched é o instante (epoch, segundos) em que a sessão começou.
+   Para cada hora, conta-se o App Launched em 1 segundo de cada minuto (60 de 3.600 segundos, 3 consultas de 20 valores)
+   e multiplica-se por 60. A soma das 24 horas é conferida contra o total real do dia. */
+const JANELAS=[
+  {nome:'Meio da manhã',curto:'manhã',ini:9,fim:11,cor:'#05a9c4'},
+  {nome:'Almoço',curto:'almoço',ini:11,fim:14,cor:'#f28b22'},
+  {nome:'Tarde 1',curto:'tarde 1',ini:14,fim:16,cor:'#d8b719'},
+  {nome:'Tarde 2',curto:'tarde 2',ini:16,fim:18,cor:'#7a8f3a'},
+  {nome:'Jantar',curto:'jantar',ini:18,fim:21,cor:'#FB2A5B'},
+];
+const MET_NOME={eventos:'aberturas'};
+const DIAS_HORA=28, MAX_DIAS_POR_VISITA=1, CONC_HORA=2;
+let horasDias={}, perfilHora='todos';
+
+const estimar=(a,ok)=>a.map((c,i)=>ok[i]?c*3600/(20*ok[i]):null);
+const janelaHoras=()=>Array.from({length:DIAS_HORA},(_,i)=>add(D1,-i));
+function statusHora(t){document.getElementById('status-hora').textContent=t}
+
+function carregarHorasCache(){
+  horasDias={};
+  const emb=(EMB&&EMB.evento===EVENTO&&EMB.horas)||{};
+  for(const d of janelaHoras()){
+    const v=emb[d]||horasSessao[d];
+    if(v&&Array.isArray(v.a)&&v.a.length===24&&v.ok.every(o=>o>0))horasDias[d]=estimar(v.a,v.ok);
+  }
+}
+
+async function contarSegundos(dia,valores){
+  for(let t=0;t<4;t++){
+    try{
+      const r=await fetchTimeout(API+'/api/conversao-geral',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({from:dia,to:dia,labels:[],evento:{nome:EVENTO,filtros:[{name:'CT Session Id',operator:'equals',value:valores}]}})},150000);
+      const d=await r.json();
+      // só vale se o backend aplicou o filtro inteiro (listas grandes demais são descartadas em silêncio)
+      if(d&&d.sucesso&&Array.isArray(d.filtros)&&d.filtros[0]&&Array.isArray(d.filtros[0].value)&&d.filtros[0].value.length===valores.length&&Number.isFinite(d.eventos_disparados))return d.eventos_disparados;
+    }catch(e){}
+    await dormir(2000*(t+1));
+  }
+  return null;
+}
+
+async function amostrarDia(dia,prog){
+  const[y,m,dd]=dia.split('-').map(Number);const tarefas=[];
+  for(let h=0;h<24;h++){
+    const base=Date.UTC(y,m-1,dd,h+3,0,0)/1000; // BRT = UTC-3
+    const segs=Array.from({length:60},(_,mi)=>String(base+mi*60+((mi*37+h*11)%60)));
+    for(let i=0;i<60;i+=20)tarefas.push({h,v:segs.slice(i,i+20)});
+  }
+  const res=await pool(tarefas,CONC_HORA,t=>contarSegundos(dia,t.v),prog);
+  const a=Array(24).fill(0),ok=Array(24).fill(0);
+  tarefas.forEach((t,i)=>{if(res[i]!=null){a[t.h]+=res[i];ok[t.h]++}});
+  return ok.every(o=>o>0)?{a,ok}:null;
+}
+
+function polar(r,a){return[170+r*Math.cos(a),170+r*Math.sin(a)]}
+const ang=h=>h/24*Math.PI*2-Math.PI/2;
+function arcoPath(r,a0,a1){const[x0,y0]=polar(r,a0),[x1,y1]=polar(r,a1);return`M${x0.toFixed(1)} ${y0.toFixed(1)} A${r} ${r} 0 ${a1-a0>Math.PI?1:0} 1 ${x1.toFixed(1)} ${y1.toFixed(1)}`}
+
+function svgRelogio(h){
+  const max=Math.max(...h),tot=h.reduce((a,b)=>a+b,0),pico=h.indexOf(max);
+  const ri=82,ro=134;const passo=Math.PI*2/24,folga=passo*0.14;
+  let s=`<svg viewBox="-34 -22 408 384" role="img" aria-label="Relógio de 24 horas com o volume por hora; pico às ${pico}h">`;
+  [0.25,0.5,0.75,1].forEach(f=>s+=`<circle class="guia" cx="170" cy="170" r="${(ri+(ro-ri)*f).toFixed(1)}"/>`);
+  h.forEach((v,i)=>{
+    const a0=ang(i)+folga,a1=ang(i+1)-folga,r=ri+(ro-ri)*(v/max);
+    const[p1x,p1y]=polar(ri,a0),[p2x,p2y]=polar(r,a0),[p3x,p3y]=polar(r,a1),[p4x,p4y]=polar(ri,a1);
+    const noSlot=JANELAS.some(j=>i>=j.ini&&i<j.fim);
+    s+=`<path class="barra-h ${i===pico?'pico':noSlot?'slot':''}" d="M${p1x.toFixed(1)} ${p1y.toFixed(1)}L${p2x.toFixed(1)} ${p2y.toFixed(1)}A${r.toFixed(1)} ${r.toFixed(1)} 0 0 1 ${p3x.toFixed(1)} ${p3y.toFixed(1)}L${p4x.toFixed(1)} ${p4y.toFixed(1)}A${ri} ${ri} 0 0 0 ${p1x.toFixed(1)} ${p1y.toFixed(1)}Z"><title>${i}h: ${(v/tot*100).toLocaleString('pt-BR',{maximumFractionDigits:1})}% do dia</title></path>`;
+  });
+  [0,6,12,18].forEach(i=>{const[x,y]=polar(ri-12,ang(i));s+=`<text class="hl" x="${x.toFixed(1)}" y="${y.toFixed(1)}">${i}h</text>`});
+  JANELAS.forEach(j=>{
+    s+=`<path class="anel" stroke="${j.cor}" d="${arcoPath(145,ang(j.ini)+0.03,ang(j.fim)-0.03)}"/>`;
+    const am=ang((j.ini+j.fim)/2),cx=Math.cos(am);const[x,y]=polar(Math.abs(cx)>0.35?155:163,am);
+    const anc=cx<-0.35?'end':cx>0.35?'start':'middle';
+    s+=`<text class="anel-rot" fill="${j.cor}" text-anchor="${anc}" x="${x.toFixed(1)}" y="${y.toFixed(1)}">${j.curto}</text>`;
+  });
+  s+=`<text class="centro-h" x="170" y="176">${pico}h</text><text class="centro-t" x="170" y="194">pico, ${Math.round(max/tot*100)}% do dia</text></svg>`;
+  return s;
+}
+
+function renderRelogio(H){
+  const box=document.getElementById('hora');const h=H.horas;const tot=h.reduce((a,b)=>a+b,0);
+  if(!(tot>0)){box.innerHTML='<div class="vazio">Os dados por hora vieram zerados. Confira o arquivo importado.</div>';return}
+  const share=(a,b)=>{let x=0;for(let i=a;i<b;i++)x+=h[i%24];return x/tot*100};
+  const js=JANELAS.map(j=>{let bh=j.ini;for(let i=j.ini;i<j.fim;i++)if(h[i]>h[bh])bh=i;const sh=share(j.ini,j.fim);return{...j,sh,bh,densidade:sh/(j.fim-j.ini)}});
+  const maxSh=Math.max(...js.map(j=>j.sh));
+  const lista=`<ul class="janelas">${js.map(j=>`<li><i style="background:${j.cor}"></i><span><b>${j.nome}</b> ${j.ini}h–${j.fim}h</span><span class="pct">${Math.round(j.sh)}%</span><span class="trilho"><span style="width:${(j.sh/maxSh*100).toFixed(0)}%;background:${j.cor}"></span></span><small>Hora mais forte da janela: ${j.bh}h (${(h[j.bh]/tot*100).toLocaleString('pt-BR',{maximumFractionDigits:1})}% do dia)</small></li>`).join('')}</ul>`;
+  const fora=100-js.reduce((a,j)=>a+j.sh,0);
+  box.innerHTML=`<div class="relogio"><div>${svgRelogio(h)}</div><div>${lista}<p class="fonte-hora">Fora das janelas (21h às 9h): ${Math.round(fora)}% do dia.</p></div></div>
+    <ul class="insights" id="ins-hora" style="margin-top:18px"></ul>
+    <details class="tabela"><summary>Ver em tabela</summary><div class="tabscroll"><table><thead><tr><th>Hora</th><th>${MET_NOME[H.metrica]||'valor'}</th><th>% do dia</th></tr></thead><tbody>${h.map((v,i)=>`<tr><td>${pad(i)}h</td><td>${H.metrica==='percentual'?v.toLocaleString('pt-BR',{maximumFractionDigits:2}):fmt(v)}</td><td>${(v/tot*100).toLocaleString('pt-BR',{maximumFractionDigits:1})}%</td></tr>`).join('')}</tbody></table></div></details>
+    <p class="fonte-hora">${H.fonteTxt}</p>`;
+
+  // leituras
+  const L=[];const pico=h.indexOf(Math.max(...h));
+  let best=-1,bh=0;for(let i=0;i<24;i++){const v=h[i]+h[(i+1)%24]+h[(i+2)%24];if(v>best){best=v;bh=i}}
+  L.push(`<b>Pico às ${pico}h</b>, com ${Math.round(h[pico]/tot*100)}% das ${MET_NOME[H.metrica]==='% do dia'?'aberturas':MET_NOME[H.metrica]} do dia. A melhor faixa de 3 horas vai das ${bh}h às ${(bh+3)%24}h e junta ${Math.round(best/tot*100)}%.`);
+  const man=share(6,12),tar=share(12,18),noi=share(18,24),mad=share(0,6);
+  const blocos=[['manhã (6h–12h)',man],['tarde (12h–18h)',tar],['noite (18h–0h)',noi]].sort((a,b)=>b[1]-a[1]);
+  L.push(`<b>O dia se divide assim:</b> ${blocos.map(b=>`${b[0]} ${Math.round(b[1])}%`).join(', ')} e madrugada ${Math.round(mad)}%.`);
+  const dens=[...js].sort((a,b)=>b.densidade-a.densidade);
+  L.push(`<b>Janela mais cheia por hora: ${dens[0].nome}</b> (${dens[0].densidade.toLocaleString('pt-BR',{maximumFractionDigits:1})}% do dia a cada hora). A mais vazia é ${dens[4].nome} (${dens[4].densidade.toLocaleString('pt-BR',{maximumFractionDigits:1})}%).`);
+  // subida mais forte
+  let sub=0,sh=0;for(let i=5;i<23;i++){const d=h[i+1]-h[i];if(d>sub){sub=d;sh=i+1}}
+  if(sub>0)L.push(`<b>A maior virada acontece às ${sh}h:</b> o volume sobe ${pctTxt(pct(h[sh],h[sh-1]))} em relação às ${sh-1}h.`);
+  L.push(`<span class="tag">hipótese</span> Push que chega uns 30 a 60 minutos antes da hora mais forte de cada janela pega a pessoa quando ela já está com o celular na mão. Testar ${js.map(j=>`${j.nome.toLowerCase()} perto das ${Math.max(j.ini,j.bh-1)}h`).slice(0,3).join(', ')} contra o horário atual, com grupo de controle.`);
+  document.getElementById('ins-hora').innerHTML=L.map(t=>`<li class="${t.includes('class="tag"')?'hip':''}">${t}</li>`).join('');
+
+  // mapa por dia da semana (só quando a fonte traz)
+  if(H.porDiaSemana){const A=H.porDiaSemana;const mx=Math.max(...A.flat());
+    let html=`<p class="nota" style="margin-top:22px">Hora × dia da semana (média por dia).</p><div class="heat" role="img" aria-label="Mapa de calor por hora e dia da semana"><div class="h"></div>${Array.from({length:24},(_,i)=>`<div class="h">${i%3===0?i:''}</div>`).join('')}`;
+    A.forEach((r,w)=>{html+=`<div class="w">${SEMANA[w]}</div>`+r.map((v,i)=>`<div title="${SEMANA_L[w]} ${i}h: ${fmt(v)}" style="background:rgba(0,169,136,${(0.08+0.92*v/mx).toFixed(2)})"></div>`).join('')});
+    box.insertAdjacentHTML('beforeend',html+'</div>');}
+}
+
+function mediaHoras(dias){const out=Array(24).fill(0);dias.forEach(d=>horasDias[d].forEach((v,i)=>out[i]+=v));return out.map(v=>v/dias.length)}
+function renderHora(){
+  const box=document.getElementById('hora');
+  const todos=janelaHoras().filter(d=>horasDias[d]).sort();
+  const base=todos.filter(d=>!FERIADOS.has(d));
+  let dias,rot;
+  if(perfilHora==='ontem'){dias=horasDias[D1]?[D1]:[];rot=`ontem (${brSem(D1)})`}
+  else if(perfilHora==='uteis'){dias=base.filter(d=>dow(d)<5);rot='média dos dias úteis'}
+  else if(perfilHora==='fds'){dias=base.filter(d=>dow(d)>=5);rot='média de sábados e domingos'}
+  else{dias=base;rot='média por dia'}
+  if(!dias.length){box.innerHTML=`<div class="vazio">${perfilHora==='ontem'?'O horário de ontem ainda está sendo calculado.':'Ainda não há dias calculados para este recorte.'}</div>`;return}
+  // conferência: soma das horas × total real do dia
+  const conf=todos.map(d=>{const x=serie.find(s=>s.d===d);if(!x||x.e==null)return null;return Math.abs(horasDias[d].reduce((a,b)=>a+b,0)/x.e-1)*100}).filter(v=>v!=null);
+  let porDia=null;
+  const nW=[0,1,2,3,4,5,6].map(w=>base.filter(d=>dow(d)===w).length);
+  if(perfilHora==='todos'&&Math.min(...nW)>=2)porDia=[0,1,2,3,4,5,6].map(w=>mediaHoras(base.filter(d=>dow(d)===w)));
+  const periodoTxt=dias.length===1?brSem(dias[0]):`${dias.length} dias entre ${br(dias[0])} e ${br(dias[dias.length-1])}${perfilHora!=='ontem'&&todos.some(d=>FERIADOS.has(d))?', sem feriados':''}`;
+  renderRelogio({horas:mediaHoras(dias),metrica:'eventos',porDiaSemana:porDia,
+    fonteTxt:`Aberturas por hora, ${rot}: ${periodoTxt}. Estimativa por amostragem na CleverTap: em cada hora conta-se o App Launched iniciado em 1 segundo de cada minuto (CT Session Id) e multiplica-se por 60.${conf.length?` Conferência: a soma das 24 horas fica, em média, a ${conf.reduce((a,b)=>a+b,0)/conf.length<0.05?'menos de 0,1':(conf.reduce((a,b)=>a+b,0)/conf.length).toLocaleString('pt-BR',{maximumFractionDigits:1})}% do total real do dia (${conf.length} dias conferidos).`:''}`});
+}
+async function carregarHorario(){
+  carregarHorasCache();renderHora();
+  const cobertos=()=>janelaHoras().filter(d=>horasDias[d]).length;
+  if(modoEmb||publicado){statusHora('');return}
+  const faltam=janelaHoras().filter(d=>!horasDias[d]).slice(0,MAX_DIAS_POR_VISITA);
+  for(let i=0;i<faltam.length;i++){
+    const d=faltam[i];
+    const r=await amostrarDia(d,(k,n)=>statusHora(`Calculando horário de ${brSem(d)}: ${Math.round(k/n*100)}% (dia ${i+1} de ${faltam.length})`));
+    if(r){horasSessao[d]=r;horasDias[d]=estimar(r.a,r.ok);renderHora()}
+  }
+  const n=cobertos();
+  statusHora(n<DIAS_HORA?`${n} de ${DIAS_HORA} dias com horário. Os demais entram nas próximas visitas (até ${MAX_DIAS_POR_VISITA} por vez).`:`Horário com as últimas 4 semanas.`);
+}
+
+/* ---------- CSV ---------- */
+document.getElementById('btn-csv').onclick=()=>{
+  const linhas=['data;dia_semana;aberturas;usuarios_unicos;aberturas_por_pessoa;feriado',...serie.map(x=>[x.d,SEMANA_L[x.dw],x.e??'',x.u??'',x.f!=null?x.f.toFixed(3).replace('.',','):'',x.fer?'sim':''].join(';'))];
+  const b=new Blob(['\ufeff'+linhas.join('\n')],{type:'text/csv;charset=utf-8'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=`app-launched-${serie[0].d}_a_${D1}.csv`;a.click();
+};
+
+/* ---------- controles ---------- */
+function segmento(id,attr,cb){document.getElementById(id).addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;[...e.currentTarget.children].forEach(x=>x.setAttribute('aria-pressed',x===b));cb(b.dataset[attr])})}
+document.querySelector('.topo .seg').addEventListener('click',async e=>{const b=e.target.closest('button');if(!b||b.dataset.modo===modo)return;[...e.currentTarget.children].forEach(x=>x.setAttribute('aria-pressed',x===b));modo=b.dataset.modo;await carregarPeriodos(false,true)});
+segmento('seg-ritmo','m',m=>{metRitmo=m;renderRitmo()});
+segmento('seg-met','m',m=>{metSerie=m;renderSerie()});
+segmento('seg-jan','j',j=>{janela=+j;renderSerie()});
+segmento('seg-hora','p',p=>{perfilHora=p;renderHora()});
+document.getElementById('btn-recarregar').onclick=()=>iniciar(true);
+
+/* ---------- fluxo ---------- */
+function renderTudo(){
+  renderManchete();
+  perfil=perfilSemana();renderRitmo();renderInsights();
+  if(typeof Chart==='undefined'){document.querySelectorAll('.graf').forEach(g=>g.innerHTML='<p class="nota">O gráfico não carregou (biblioteca bloqueada neste ambiente). A tabela abaixo tem os mesmos dados.</p>');
+    document.getElementById('tab-serie').innerHTML=`<table><thead><tr><th>Dia</th><th>Aberturas</th><th>Únicos</th><th>Por pessoa</th></tr></thead><tbody>${[...serie].reverse().map(x=>`<tr><td>${brSem(x.d)}${x.fer?' (feriado)':''}</td><td>${fmt(x.e)}</td><td>${fmt(x.u)}</td><td>${fmt2(x.f)}</td></tr>`).join('')}</tbody></table>`}
+  else{renderSerie();renderDom()}
+}
+function usarEmbutido(){modoEmb=true;D1=EMB.d1;IMUTAVEL=EMB.d1}
+function usarApi(){modoEmb=false;D1=add(hoje,-1);IMUTAVEL=add(hoje,-3)}
+async function apiResponde(){
+  try{
+    const r=await fetchTimeout(API+'/api/conversao-geral',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({from:add(hoje,-1),to:add(hoje,-1),labels:[],evento:{nome:EVENTO,filtros:[]}})},150000);
+    const d=await r.json();return !!(d&&d.sucesso);
+  }catch(e){return false}
+}
+let renderizado=false, publicado=false;
+async function carregarPublicado(){
+  try{
+    const r=await fetchTimeout('dados.json?v='+Date.now(),{cache:'no-store'},15000);if(!r.ok)return;
+    const j=await r.json();
+    if(j&&j.evento===EVENTO&&/^\d{4}-\d{2}-\d{2}$/.test(j.d1||'')&&j.consultas&&(!EMB||j.d1>=EMB.d1)){EMB=j;publicado=true}
+  }catch(e){}
+}
+function atualizadoTxt(){const h=new Date(EMB.gerado_em).toLocaleString('pt-BR',{timeZone:TZ,day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});return `Dados até ${brSem(EMB.d1)}. Atualizado automaticamente em ${h}.`}
+const dataBR=iso=>new Date(iso).toLocaleDateString('pt-BR',{timeZone:TZ});
+function retratoTxt(){return `Dados até ${brSem(EMB.d1)}. Retrato gerado em ${dataBR(EMB.gerado_em)}.`}
+function rodapeRetrato(){document.getElementById('rodape').textContent=`Fonte: CleverTap, evento ${EVENTO}, ${publicado?'atualizado automaticamente todo dia de madrugada':'extraído em '+dataBR(EMB.gerado_em)}. Pessoas únicas de semana, quinzena e mês vêm da consulta do período inteiro (não é soma dos dias). Horário estimado por amostragem: 1 segundo de cada minuto (início da sessão), ×60; a soma das 24 horas é conferida contra o total real de cada dia.`}
+async function iniciar(forcar=false){
+  try{
+    // 0) dados publicados pela atualização diária (dados.json ao lado do index.html)
+    if(!renderizado)await carregarPublicado();
+    // 1) mostra na hora o que já temos
+    if(EMB&&EMB.evento===EVENTO&&!renderizado){
+      usarEmbutido();
+      await carregarPeriodos(false,true);await carregarSerie(false);renderTudo();renderizado=true;carregarHorario();rodapeRetrato();
+      status(publicado?atualizadoTxt():retratoTxt());
+    }else if(!renderizado){status('Conectando à API')}
+    // dados publicados em dia: não precisa chamar a API
+    if(publicado&&EMB.d1>=add(hoje,-1)&&!forcar){document.getElementById('btn-recarregar').hidden=true;return}
+    // 2) tenta a API ao vivo
+    usarApi();
+    const aviso=setTimeout(()=>status(renderizado?retratoTxt()+' Buscando atualização…':'Servidor acordando. Pode levar até 1 minuto'),4000);
+    const ok=await apiResponde();clearTimeout(aviso);
+    if(!ok){
+      if(renderizado){usarEmbutido();status(publicado?atualizadoTxt():retratoTxt());document.getElementById('btn-recarregar').hidden=true;rodapeRetrato()}
+      else{status('');document.getElementById('alertas').innerHTML=`<div class="alerta">Não consegui falar com a API (${API.replace('https://','')}). Se abriu pela prévia de arquivo, ela bloqueia conexões externas; publique no Render. <button type="button" id="btn-refazer2">Tentar de novo</button></div>`;document.getElementById('btn-refazer2').onclick=()=>iniciar(true)}
+      carregarHorario();return;
+    }
+    carregarSemente();
+    status('Atualizando com a API');
+    await carregarPeriodos(forcar,!renderizado);
+    await carregarSerie(forcar);
+    renderTudo();renderizado=true;
+    const agora=new Intl.DateTimeFormat('pt-BR',{timeZone:TZ,hour:'2-digit',minute:'2-digit'}).format(new Date());
+    status(`Ao vivo. Dados até ${brSem(D1)}, atualizado às ${agora}.`);
+    document.getElementById('rodape').textContent=`Fonte: CleverTap, evento ${EVENTO}, via ${API.replace('https://','')}. Pessoas únicas de semana, quinzena e mês são consultadas no período inteiro (não é soma dos dias). Horário estimado por amostragem: 1 segundo de cada minuto (início da sessão), ×60.`;
+    carregarHorario();
+  }catch(e){console.error(e);status('');document.getElementById('alertas').innerHTML=`<div class="alerta">Erro ao montar o painel: ${e.message}. <button type="button" onclick="location.reload()">Recarregar</button></div>`}
+}
+window.__dadosPainel=()=>({evento:EVENTO,d1:D1,gerado_em:new Date().toISOString(),consultas:Object.fromEntries([...mem].map(([k,v])=>[k,[v.e,v.u]]))});
+iniciar();
+})();
+</script>
+</body>
+</html>
